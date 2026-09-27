@@ -60,14 +60,29 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   relationships — matches this codebase's existing convention of referencing other
   aggregates/records by id only (e.g. `User.OrganizationId`, `RoleRight.RightId`), so no FK
   constraints/cascades to reason about. Migrations regenerated for all three providers
-  (`AddDepartments`). This is the prerequisite step for the resource-availability epic below —
-  next is `GanttTask.AssignedUserId`.
-- Last verified: backend **91/91** non-container tests as of `ca11b1e` (Domain 23, Application 31,
-  Infrastructure 9, Api 28), frontend 16/16 (unchanged, no frontend work this pass). SqlServer/
-  PostgreSql Testcontainers legs and `ng build`/`ng serve` (needs Node ≥22.22) can't run locally in
-  this environment — CI is the real verification for both. **CI confirmed green on all four jobs
-  for `bf13250`** (Frontend/Sqlite/SqlServer/PostgreSql, checked via the GitHub API); `ca11b1e`
-  (this pass's Department work) is pushed but not yet reconfirmed — check before trusting it.
+  (`AddDepartments`).
+- **`GanttTask.AssignedUserId`** (nullable): `AssignUser(Guid? userId)` method on `GanttTask`
+  itself (not a `Project`-level wrapper — matches the existing convention where `Reschedule`/
+  `UpdateProgress`/`AddDependency` are already called directly on a `GanttTask` instance obtained
+  from `Project.Tasks`/`AddTask`, not proxied through `Project`). No EF configuration change needed
+  — `GanttTask` is `OwnsMany`'d (see `ProjectConfiguration`), so a plain scalar property is picked
+  up by convention. Migrations regenerated for all three providers (`AddGanttTaskAssignedUser`).
+  **Important gap found while doing this**: there is no Application/Api layer for `GanttTask` at
+  all — `CreateProjectCommand` is the *only* Project-related command/endpoint that exists; there's
+  no way to add/list/reschedule/assign a task over HTTP today (the Gantt UI must be rendering
+  local/sample data, not real backend tasks). `AssignedUserId` is therefore only settable at the
+  domain/test level right now, same shape of problem the FluentValidation pipeline gap was before
+  it got wired up — flagging it explicitly this time instead of leaving it silently inert. The
+  availability query (next step) will need at least a read path for tasks-by-assignee; building
+  real task-management endpoints is a bigger, separate piece of work than this plan bullet
+  originally scoped and should probably be called out to the user before starting it.
+- Last verified: backend **94/94** non-container tests (Domain 26, Application 31, Infrastructure 9,
+  Api 28), frontend 16/16 (unchanged, no frontend work this pass). SqlServer/PostgreSql
+  Testcontainers legs and `ng build`/`ng serve` (needs Node ≥22.22) can't run locally in this
+  environment — CI is the real verification for both. **CI confirmed green on all four jobs for
+  `bf13250`** (Frontend/Sqlite/SqlServer/PostgreSql, checked via the GitHub API); commits since
+  then (`ca11b1e` Department slice, and this `GanttTask.AssignedUserId` work) are pushed/pending
+  push but not yet reconfirmed — check before trusting them.
 
 ### Gotchas learned the hard way (still true, worth not re-discovering)
 
@@ -101,7 +116,8 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 - Invite/verification gating for org + user self-registration.
 - E2E in CI — needs API + DB running alongside the dev server; deliberately deferred rather than
   built speculatively. Revisit if E2E starts getting skipped in practice.
-- Resource-availability epic beyond `Department`/`User.DepartmentId` above (see next section).
+- Resource-availability epic beyond `Department`/`User.DepartmentId`/`GanttTask.AssignedUserId`
+  above (see next section) — Kanban, the availability query, and all frontend for this epic.
 
 ## Planned: cross-department resource availability (shared vacation calendar × Gantt × Kanban)
 
@@ -125,10 +141,13 @@ built (see Done); everything else below is still a design sketch, unbuilt.
 
 **Proposed shape:**
 - Domain: `Department` + `User.DepartmentId` — **done** (see Done above).
-- Domain: `GanttTask.AssignedUserId` (nullable) — no assignee concept exists on Gantt tasks today.
-  **Next up.**
+- Domain: `GanttTask.AssignedUserId` — **done** (see Done above), but with no Application/Api
+  layer to set it through outside tests (pre-existing gap: `GanttTask` has no CRUD surface at all
+  yet). Worth a decision before the availability query: build minimal task endpoints now, or have
+  the availability query read whatever's in the DB (populated only via direct DB writes/tests for
+  now) and defer full task CRUD.
 - Domain: new Kanban bounded context — `Board`/`KanbanColumn`/`KanbanCard` (`AssignedUserId`,
-  optional link back to a `GanttTask`). Doesn't exist at all yet.
+  optional link back to a `GanttTask`). Doesn't exist at all yet. **Next up** for domain work.
 - Application: `GET /api/resources/availability` (optional `departmentId` inclusive-of-descendants
   / `projectId` + date range) → per-user approved leave + assigned Gantt tasks + assigned Kanban
   cards overlapping the range. The one query every other view in this epic renders against.
@@ -140,13 +159,15 @@ built (see Done); everything else below is still a design sketch, unbuilt.
 
 1. Confirm CI is green on all four jobs for the latest pushed commit — SqlServer/PostgreSql
    Testcontainers legs specifically haven't been reconfirmed since the migrations pass landed.
-2. Continue the resource-availability epic: `GanttTask.AssignedUserId` next, then the availability
-   query (inclusive-of-descendants department resolution, see design decisions above), then Kanban
-   last (newest/least-validated part of the ask). Frontend department picker/management UI and the
-   calendar page follow once the availability query exists.
-3. Cross-org Admin visibility for leave requests — same shape of gap as cross-department
+2. Decide with the user how to handle the just-found `GanttTask` CRUD gap (see above) before
+   building the availability query against it.
+3. Continue the resource-availability epic: Kanban bounded context next (domain only, same
+   treatment as Department/GanttTask), then the availability query (inclusive-of-descendants
+   department resolution, see design decisions above). Frontend department picker/management UI
+   and the calendar page follow once the availability query exists.
+4. Cross-org Admin visibility for leave requests — same shape of gap as cross-department
    visibility above, worth solving once rather than building two "who can see whose stuff"
    mechanisms.
-4. Refresh-token flow on the frontend.
-5. Decide on invite/verification gating for org + user self-registration before this goes beyond
+5. Refresh-token flow on the frontend.
+6. Decide on invite/verification gating for org + user self-registration before this goes beyond
    local dev.

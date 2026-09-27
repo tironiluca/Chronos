@@ -360,6 +360,9 @@ namespace Chronos.Infrastructure.Persistence.Migrations.PostgreSql
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid");
 
+                            b1.Property<Guid?>("AssignedUserId")
+                                .HasColumnType("uuid");
+
                             b1.Property<DateOnly>("EndDate")
                                 .HasColumnType("date");
 

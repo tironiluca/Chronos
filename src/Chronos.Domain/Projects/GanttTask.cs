@@ -13,6 +13,11 @@ public class GanttTask : Entity
     public int ProgressPercent { get; private set; }
     public Guid? ParentTaskId { get; private set; } // hierarchical WBS support
 
+    // Nullable: a task isn't required to have an assignee. Set via AssignUser, not the
+    // constructor, so existing callers aren't forced to pass one -- see the resource-availability
+    // epic in IMPLEMENTATION_PLAN.md, which cross-references this against a person's calendar.
+    public Guid? AssignedUserId { get; private set; }
+
     public IReadOnlyCollection<TaskDependency> Dependencies => _dependencies.AsReadOnly();
 
     private GanttTask() { } // EF Core
@@ -47,6 +52,12 @@ public class GanttTask : Entity
             throw new ArgumentOutOfRangeException(nameof(percent), "Progress must be between 0 and 100.");
 
         ProgressPercent = percent;
+    }
+
+    // null unassigns the task.
+    public void AssignUser(Guid? userId)
+    {
+        AssignedUserId = userId;
     }
 
     public void AddDependency(Guid predecessorTaskId, DependencyType type, int lagDays = 0)

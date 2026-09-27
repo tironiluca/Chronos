@@ -360,6 +360,9 @@ namespace Chronos.Infrastructure.Persistence.Migrations.SqlServer
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("uniqueidentifier");
 
+                            b1.Property<Guid?>("AssignedUserId")
+                                .HasColumnType("uniqueidentifier");
+
                             b1.Property<DateOnly>("EndDate")
                                 .HasColumnType("date");
 

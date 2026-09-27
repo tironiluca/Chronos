@@ -3,6 +3,7 @@ using System;
 using Chronos.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Chronos.Infrastructure.Persistence.Migrations.Sqlite
 {
     [DbContext(typeof(SqliteChronosDbContext))]
-    partial class SqliteChronosDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260927183455_AddGanttTaskAssignedUser")]
+    partial class AddGanttTaskAssignedUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
