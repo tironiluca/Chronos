@@ -1,9 +1,12 @@
+using System.Security.Claims;
 using MediatR;
+using Chronos.Api.Security;
 using Chronos.Application.Leave.Commands.ApproveLeaveRequest;
 using Chronos.Application.Leave.Commands.CancelLeaveRequest;
 using Chronos.Application.Leave.Commands.CreateLeaveRequest;
 using Chronos.Application.Leave.Commands.RejectLeaveRequest;
 using Chronos.Application.Leave.Queries.GetLeaveRequestsByOrganization;
+using Chronos.Domain.Leave;
 
 namespace Chronos.Api.Endpoints;
 
@@ -11,43 +14,45 @@ public static class LeaveEndpoints
 {
     public static void MapLeaveEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/leave-requests").WithTags("Leave");
+        var group = app.MapGroup("/api/leave-requests").WithTags("Leave").RequireAuthorization();
 
-        group.MapGet("/", async (Guid organizationId, ISender sender) =>
+        // Always the caller's own organization -- an authenticated user only ever sees their
+        // org's requests. Cross-org visibility for Admins is a documented follow-up, not done yet.
+        group.MapGet("/", async (ClaimsPrincipal user, ISender sender) =>
         {
-            var result = await sender.Send(new GetLeaveRequestsByOrganizationQuery(organizationId));
+            var result = await sender.Send(new GetLeaveRequestsByOrganizationQuery(user.GetOrganizationId()));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
         });
 
-        group.MapPost("/", async (CreateLeaveRequestCommand command, ISender sender) =>
+        group.MapPost("/", async (CreateLeaveRequestBody body, ClaimsPrincipal user, ISender sender) =>
         {
+            var command = new CreateLeaveRequestCommand(
+                user.GetOrganizationId(), user.GetUserId(), body.Type, body.StartDate, body.EndDate);
             var result = await sender.Send(command);
             return result.IsSuccess
                 ? Results.Created($"/api/leave-requests/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
         });
 
-        group.MapPost("/{id:guid}/approve", async (Guid id, ApproveLeaveRequestBody body, ISender sender) =>
+        group.MapPost("/{id:guid}/approve", async (Guid id, ClaimsPrincipal user, ISender sender) =>
         {
-            var result = await sender.Send(new ApproveLeaveRequestCommand(id, body.ApproverId));
+            var result = await sender.Send(new ApproveLeaveRequestCommand(id, user.GetUserId()));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        });
+        }).RequireAuthorization("ApproverOrAdmin");
 
-        group.MapPost("/{id:guid}/reject", async (Guid id, RejectLeaveRequestBody body, ISender sender) =>
+        group.MapPost("/{id:guid}/reject", async (Guid id, RejectLeaveRequestBody body, ClaimsPrincipal user, ISender sender) =>
         {
-            var result = await sender.Send(new RejectLeaveRequestCommand(id, body.ApproverId, body.Reason));
+            var result = await sender.Send(new RejectLeaveRequestCommand(id, user.GetUserId(), body.Reason));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        });
+        }).RequireAuthorization("ApproverOrAdmin");
 
-        group.MapPost("/{id:guid}/cancel", async (Guid id, ISender sender) =>
+        group.MapPost("/{id:guid}/cancel", async (Guid id, ClaimsPrincipal user, ISender sender) =>
         {
-            var result = await sender.Send(new CancelLeaveRequestCommand(id));
+            var result = await sender.Send(new CancelLeaveRequestCommand(id, user.GetUserId(), user.IsAdmin()));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
         });
     }
 
-    // Minimal API model-binds record bodies fine, but keeping the route param (id) out of the
-    // JSON body needs a small wrapper type rather than binding straight to the command record.
-    public record ApproveLeaveRequestBody(Guid ApproverId);
-    public record RejectLeaveRequestBody(Guid ApproverId, string Reason);
+    public record CreateLeaveRequestBody(LeaveType Type, DateOnly StartDate, DateOnly EndDate);
+    public record RejectLeaveRequestBody(string Reason);
 }

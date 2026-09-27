@@ -1,4 +1,4 @@
-import { Component, inject, input, output, signal } from '@angular/core';
+import { Component, inject, output, signal } from '@angular/core';
 import { LeaveService } from '../../core/api/leave.service';
 import { LeaveType } from '../../core/api/leave.model';
 
@@ -34,8 +34,6 @@ import { LeaveType } from '../../core/api/leave.model';
   `
 })
 export class LeaveRequestFormComponent {
-  organizationId = input.required<string>();
-  requesterId = input.required<string>();
   created = output<string>();
 
   private readonly leaveService = inject(LeaveService);
@@ -51,14 +49,9 @@ export class LeaveRequestFormComponent {
     this.error.set(null);
     this.submitting.set(true);
 
+    // organizationId/requesterId are not sent -- the server reads both off the caller's JWT.
     this.leaveService
-      .create({
-        organizationId: this.organizationId(),
-        requesterId: this.requesterId(),
-        type: this.type(),
-        startDate: this.startDate(),
-        endDate: this.endDate()
-      })
+      .create({ type: this.type(), startDate: this.startDate(), endDate: this.endDate() })
       .subscribe({
         next: (id) => {
           this.submitting.set(false);

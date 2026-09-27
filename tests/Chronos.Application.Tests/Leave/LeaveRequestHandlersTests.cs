@@ -100,7 +100,40 @@ public class LeaveRequestHandlersTests
         repository.GetByIdAsync(leaveRequest.Id, Arg.Any<CancellationToken>()).Returns(leaveRequest);
         var handler = new CancelLeaveRequestCommandHandler(repository);
 
-        var result = await handler.Handle(new CancelLeaveRequestCommand(leaveRequest.Id), CancellationToken.None);
+        var result = await handler.Handle(
+            new CancelLeaveRequestCommand(leaveRequest.Id, leaveRequest.RequesterId, CallerIsAdmin: false), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        leaveRequest.Status.Should().Be(LeaveStatus.Cancelled);
+    }
+
+    [Fact]
+    public async Task CancelLeaveRequest_WhenCallerIsNotRequesterOrAdmin_ReturnsFailure()
+    {
+        var leaveRequest = new LeaveRequest(Guid.NewGuid(), Guid.NewGuid(), LeaveType.Vacation,
+            new DateOnly(2026, 8, 10), new DateOnly(2026, 8, 17));
+        var repository = Substitute.For<ILeaveRequestRepository>();
+        repository.GetByIdAsync(leaveRequest.Id, Arg.Any<CancellationToken>()).Returns(leaveRequest);
+        var handler = new CancelLeaveRequestCommandHandler(repository);
+
+        var result = await handler.Handle(
+            new CancelLeaveRequestCommand(leaveRequest.Id, Guid.NewGuid(), CallerIsAdmin: false), CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        leaveRequest.Status.Should().Be(LeaveStatus.Pending);
+    }
+
+    [Fact]
+    public async Task CancelLeaveRequest_WhenCallerIsAdmin_CancelsEvenIfNotRequester()
+    {
+        var leaveRequest = new LeaveRequest(Guid.NewGuid(), Guid.NewGuid(), LeaveType.Vacation,
+            new DateOnly(2026, 8, 10), new DateOnly(2026, 8, 17));
+        var repository = Substitute.For<ILeaveRequestRepository>();
+        repository.GetByIdAsync(leaveRequest.Id, Arg.Any<CancellationToken>()).Returns(leaveRequest);
+        var handler = new CancelLeaveRequestCommandHandler(repository);
+
+        var result = await handler.Handle(
+            new CancelLeaveRequestCommand(leaveRequest.Id, Guid.NewGuid(), CallerIsAdmin: true), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         leaveRequest.Status.Should().Be(LeaveStatus.Cancelled);

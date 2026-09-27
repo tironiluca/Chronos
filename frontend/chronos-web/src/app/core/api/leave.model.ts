@@ -13,9 +13,10 @@ export interface LeaveRequestDto {
   rejectionReason: string | null;
 }
 
+// organizationId/requesterId are NOT sent by the client: the server derives both from the
+// caller's JWT (see LeaveEndpoints.MapLeaveEndpoints), so a user can only ever create a
+// request for themselves in their own organization.
 export interface CreateLeaveRequestPayload {
-  organizationId: string;
-  requesterId: string;
   type: LeaveType;
   startDate: string;
   endDate: string;

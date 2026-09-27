@@ -18,8 +18,9 @@ public class CancelLeaveRequestCommandHandler : IRequestHandler<CancelLeaveReque
         if (leaveRequest is null)
             return Result.Failure($"Leave request '{request.LeaveRequestId}' was not found.");
 
-        // NOTE: no authorization check yet -- once auth/user context lands, this handler must
-        // verify request.RequesterId (or the caller's identity) matches leaveRequest.RequesterId.
+        if (leaveRequest.RequesterId != request.CallerId && !request.CallerIsAdmin)
+            return Result.Failure("Only the requester or an admin can cancel this request.");
+
         try
         {
             leaveRequest.Cancel();

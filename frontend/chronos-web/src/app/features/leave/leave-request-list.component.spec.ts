@@ -43,19 +43,17 @@ describe('LeaveRequestListComponent', () => {
     });
 
     const fixture = TestBed.createComponent(LeaveRequestListComponent);
-    fixture.componentRef.setInput('organizationId', 'org-1');
-    fixture.componentRef.setInput('currentUserId', 'approver-1');
     fixture.detectChanges();
     return fixture;
   }
 
-  it('approves with the current user as approver and reloads the list', () => {
+  it('approves without needing the current user id (server derives it from the JWT)', () => {
     const fakeService = createFakeLeaveService([pendingRequest]);
     const fixture = setup(fakeService);
 
     fixture.componentInstance.approve('lr-1');
 
-    expect(fakeService.approve).toHaveBeenCalledWith('lr-1', 'approver-1');
+    expect(fakeService.approve).toHaveBeenCalledWith('lr-1');
     expect(fakeService.reloadSpy).toHaveBeenCalled();
   });
 
@@ -72,7 +70,7 @@ describe('LeaveRequestListComponent', () => {
     instance.rejectionReason.set('Coverage gap that week');
     instance.confirmReject('lr-1');
 
-    expect(fakeService.reject).toHaveBeenCalledWith('lr-1', 'approver-1', 'Coverage gap that week');
+    expect(fakeService.reject).toHaveBeenCalledWith('lr-1', 'Coverage gap that week');
     expect(instance.rejectingId()).toBeNull();
   });
 

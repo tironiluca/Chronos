@@ -64,20 +64,44 @@ If a future requirement needs resource histograms, baselines, or critical-path h
 what Frappe Gantt offers, evaluate DHTMLX Gantt Community Edition (GPLv2, requires either open-sourcing
 Chronos or a commercial license) at that point — not before, since it isn't license-cost-free.
 
+## Auth
+
+JWT bearer tokens, issued by `POST /api/auth/login`. `POST /api/auth/register` self-registers
+into an existing `OrganizationId` as an `Employee` (the only role self-registration can create —
+promoting to `Approver`/`Admin` is an admin-only operation, **not implemented yet**). Passwords
+are hashed with PBKDF2-SHA256 (`Pbkdf2PasswordHasher`, BCL only, no extra dependency).
+
+The token carries `NameIdentifier` (user id), `Role`, and a custom `org` claim (organization id).
+`Chronos.Api.Security.ClaimsPrincipalExtensions` reads these back out. Every endpoint derives
+`OrganizationId`/requester/approver identity from the token, never from the request body — a
+client cannot act as another user or write into another organization by supplying a different id
+in the payload. `/approve` and `/reject` additionally require the `ApproverOrAdmin` policy;
+`/cancel` allows the original requester or an Admin (checked in `CancelLeaveRequestCommandHandler`,
+not just at the endpoint).
+
+**Known gaps**, in order of what to fix before real use: the `SigningKey` in `appsettings.json`
+is a placeholder and must move to user-secrets/environment/Key Vault before this is anything but
+local dev; there's no refresh-token flow (the frontend just treats an expired token as logged
+out); registration accepts any `OrganizationId` from the caller with no invite/verification step;
+and an Admin only ever sees their own organization's leave requests (no cross-org view yet).
+
+Frontend: `AuthService` holds the session as a signal (persisted to `localStorage`), `authInterceptor`
+attaches the bearer token to every request except `/api/auth/*`, `authGuard` protects routes.
+`LoginComponent` is routed at `/login`.
+
 ## Leave (ferie) workflow
 
-`POST /api/leave-requests` (create, Pending) → `POST /api/leave-requests/{id}/approve`,
-`/reject` (body: `{ approverId, reason }`) or `/cancel`. `GET /api/leave-requests?organizationId=`
-lists an organization's requests. Domain invariants (only a Pending request can be
-approved/rejected/cancelled) are enforced on `LeaveRequest` itself and surfaced as `400` rather
-than a `500` — see `ApproveLeaveRequestCommandHandler` for the try/catch-and-translate pattern
-reused by Reject/Cancel.
+`POST /api/leave-requests` (create, Pending; body is just `{ type, startDate, endDate }` — the
+server fills in organization/requester from the token) → `POST /api/leave-requests/{id}/approve`
+(`ApproverOrAdmin` only), `/reject` (`ApproverOrAdmin`, body `{ reason }`), or `/cancel`
+(requester or Admin). `GET /api/leave-requests` lists the caller's own organization. Domain
+invariants (only a Pending request can be approved/rejected/cancelled) are enforced on
+`LeaveRequest` itself and surfaced as `400` rather than a `500` — see
+`ApproveLeaveRequestCommandHandler` for the try/catch-and-translate pattern reused by Reject/Cancel.
 
 Frontend: `LeaveRequestFormComponent` + `LeaveRequestListComponent` (approve/reject/cancel on
-Pending items) are fully unit-tested, and `LeaveRequestsPageComponent` composes them. **Not yet
-wired into `app.routes.ts`**: both `organizationId` and the approver/requester identity
-(`currentUserId`) need a real source, and there's no auth in this scaffold yet. Route it once
-that exists, ideally binding `organizationId` from the URL via `withComponentInputBinding()`.
+Pending items), composed by `LeaveRequestsPageComponent`, routed at `/leave` behind `authGuard`.
+Neither component takes an identity input — both rely on the JWT via `authInterceptor`.
 
 ## Running locally
 

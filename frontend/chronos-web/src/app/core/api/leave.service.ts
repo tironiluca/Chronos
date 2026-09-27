@@ -6,22 +6,24 @@ import { CreateLeaveRequestPayload, LeaveRequestDto } from './leave.model';
 export class LeaveService {
   private readonly http = inject(HttpClient);
 
-  // GET modelled as a resource (stable in Angular 22): re-fetches whenever organizationId changes,
-  // exposes .value() / .isLoading() / .error() / .reload() as signals.
-  leaveRequestsResource(organizationId: () => string) {
-    return httpResource<LeaveRequestDto[]>(() => `/api/leave-requests?organizationId=${organizationId()}`);
+  // Always the caller's own organization -- the server derives it from the JWT, so there is
+  // no organizationId parameter here to get wrong.
+  leaveRequestsResource() {
+    return httpResource<LeaveRequestDto[]>(() => '/api/leave-requests');
   }
 
   create(payload: CreateLeaveRequestPayload) {
     return this.http.post<string>('/api/leave-requests', payload);
   }
 
-  approve(leaveRequestId: string, approverId: string) {
-    return this.http.post<void>(`/api/leave-requests/${leaveRequestId}/approve`, { approverId });
+  // approverId is derived server-side from the caller's JWT (see LeaveEndpoints), so it is
+  // not something the client passes -- it always means "the currently logged-in user".
+  approve(leaveRequestId: string) {
+    return this.http.post<void>(`/api/leave-requests/${leaveRequestId}/approve`, {});
   }
 
-  reject(leaveRequestId: string, approverId: string, reason: string) {
-    return this.http.post<void>(`/api/leave-requests/${leaveRequestId}/reject`, { approverId, reason });
+  reject(leaveRequestId: string, reason: string) {
+    return this.http.post<void>(`/api/leave-requests/${leaveRequestId}/reject`, { reason });
   }
 
   cancel(leaveRequestId: string) {

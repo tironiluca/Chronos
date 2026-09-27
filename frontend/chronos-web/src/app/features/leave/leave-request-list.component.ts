@@ -1,4 +1,4 @@
-import { Component, inject, input, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { LeaveService } from '../../core/api/leave.service';
 
 @Component({
@@ -34,12 +34,8 @@ import { LeaveService } from '../../core/api/leave.service';
   `
 })
 export class LeaveRequestListComponent {
-  organizationId = input.required<string>();
-  // Will come from the authenticated session once auth is wired in; passed explicitly for now.
-  currentUserId = input.required<string>();
-
   private readonly leaveService = inject(LeaveService);
-  protected readonly resource = this.leaveService.leaveRequestsResource(() => this.organizationId());
+  protected readonly resource = this.leaveService.leaveRequestsResource();
   protected readonly rejectingId = signal<string | null>(null);
   protected readonly rejectionReason = signal('');
 
@@ -47,15 +43,18 @@ export class LeaveRequestListComponent {
     this.resource.reload();
   }
 
+  // approve/reject/cancel: the server derives approver/requester identity and the
+  // ApproverOrAdmin authorization check from the caller's JWT (see LeaveEndpoints), so this
+  // component only needs the leave request id, never the current user's own id.
   approve(id: string): void {
-    this.leaveService.approve(id, this.currentUserId()).subscribe(() => this.resource.reload());
+    this.leaveService.approve(id).subscribe(() => this.resource.reload());
   }
 
   confirmReject(id: string): void {
     const reason = this.rejectionReason();
     if (!reason) return;
 
-    this.leaveService.reject(id, this.currentUserId(), reason).subscribe(() => {
+    this.leaveService.reject(id, reason).subscribe(() => {
       this.rejectingId.set(null);
       this.rejectionReason.set('');
       this.resource.reload();

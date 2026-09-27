@@ -7,5 +7,6 @@ public class CancelLeaveRequestCommandValidator : AbstractValidator<CancelLeaveR
     public CancelLeaveRequestCommandValidator()
     {
         RuleFor(x => x.LeaveRequestId).NotEmpty();
+        RuleFor(x => x.CallerId).NotEmpty();
     }
 }

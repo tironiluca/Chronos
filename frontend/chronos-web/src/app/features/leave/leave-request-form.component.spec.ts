@@ -16,10 +16,8 @@ describe('LeaveRequestFormComponent', () => {
 
   afterEach(() => httpMock.verify());
 
-  it('submits the current field values and emits the created id', () => {
+  it('submits only type/startDate/endDate and emits the created id', () => {
     const fixture = TestBed.createComponent(LeaveRequestFormComponent);
-    fixture.componentRef.setInput('organizationId', 'org-1');
-    fixture.componentRef.setInput('requesterId', 'user-1');
     fixture.detectChanges();
 
     const instance = fixture.componentInstance as unknown as {
@@ -37,8 +35,6 @@ describe('LeaveRequestFormComponent', () => {
     const req = httpMock.expectOne('/api/leave-requests');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
-      organizationId: 'org-1',
-      requesterId: 'user-1',
       type: 'Vacation',
       startDate: '2026-08-10',
       endDate: '2026-08-17'
@@ -51,8 +47,6 @@ describe('LeaveRequestFormComponent', () => {
 
   it('surfaces the server error and keeps the form usable', () => {
     const fixture = TestBed.createComponent(LeaveRequestFormComponent);
-    fixture.componentRef.setInput('organizationId', 'org-1');
-    fixture.componentRef.setInput('requesterId', 'user-1');
     fixture.detectChanges();
 
     fixture.nativeElement.querySelector('form').dispatchEvent(new Event('submit'));
