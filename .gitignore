@@ -1,0 +1,22 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+*.db
+*.db-shm
+*.db-wal
+
+## Angular / Node
+frontend/chronos-web/node_modules/
+frontend/chronos-web/dist/
+frontend/chronos-web/.angular/
+frontend/chronos-web/coverage/
+e2e/chronos-e2e/node_modules/
+e2e/chronos-e2e/test-results/
+e2e/chronos-e2e/playwright-report/
+
+## IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
