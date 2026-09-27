@@ -3,8 +3,17 @@ import { authGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
+    path: '',
+    pathMatch: 'full',
+    redirectTo: 'leave'
+  },
+  {
     path: 'login',
     loadComponent: () => import('./features/auth/login.component').then((m) => m.LoginComponent)
+  },
+  {
+    path: 'register',
+    loadComponent: () => import('./features/auth/register.component').then((m) => m.RegisterComponent)
   },
   {
     path: 'leave',
@@ -17,5 +26,9 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/gantt/gantt-chart.component').then((m) => m.GanttChartComponent)
+  },
+  {
+    path: '**',
+    redirectTo: 'leave'
   }
 ];

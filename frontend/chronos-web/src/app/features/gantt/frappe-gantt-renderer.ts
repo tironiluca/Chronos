@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import Gantt from 'frappe-gantt';
+import Gantt from 'frappe-gantt/dist/frappe-gantt.js';
 import 'frappe-gantt/dist/frappe-gantt.css';
 import { GanttTaskDto } from '../../core/api/project.model';
 import { IGanttRenderer } from './gantt-renderer';

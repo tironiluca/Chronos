@@ -1,26 +1,32 @@
 import { Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'chronos-login',
   standalone: true,
+  imports: [RouterLink],
   template: `
-    <form (submit)="onSubmit($event)">
-      <label>
-        Email
-        <input type="email" [value]="email()" (input)="email.set($any($event.target).value)" />
-      </label>
-      <label>
-        Password
-        <input type="password" [value]="password()" (input)="password.set($any($event.target).value)" />
-      </label>
-      <button type="submit" [disabled]="submitting()">Log in</button>
-      @if (error()) {
-        <p class="error">{{ error() }}</p>
-      }
-    </form>
-  `
+    <div class="auth-page">
+      <form class="auth-card" (submit)="onSubmit($event)">
+        <h1>Log in</h1>
+        <label>
+          Email
+          <input type="email" [value]="email()" (input)="email.set($any($event.target).value)" />
+        </label>
+        <label>
+          Password
+          <input type="password" [value]="password()" (input)="password.set($any($event.target).value)" />
+        </label>
+        <button type="submit" [disabled]="submitting()">Log in</button>
+        @if (error()) {
+          <p class="error">{{ error() }}</p>
+        }
+        <p><a routerLink="/register">Need an account? Register</a></p>
+      </form>
+    </div>
+  `,
+  styleUrl: './auth.styles.scss'
 })
 export class LoginComponent {
   private readonly authService = inject(AuthService);

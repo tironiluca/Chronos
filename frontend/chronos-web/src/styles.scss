@@ -1,1 +1,61 @@
-/* Global styles. Kept empty on purpose -- component-level styles live next to their components. */
+/* Global styles. Component-level styles live next to their components. */
+
+:root {
+  /* Fonts. Swap --font-family-base to retheme; --font-family-alt is a
+     ready-made alternative (rounded/humanist) kept in sync as a fallback. */
+  --font-family-base: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-family-alt: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+
+  /* Color tokens. Override any of these (globally or under a scoping
+     selector such as [data-theme="dark"]) to produce a custom theme. */
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-text: #1e293b;
+  --color-text-muted: #64748b;
+  --color-border: #cccccc;
+
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-contrast: #ffffff;
+
+  --color-danger: #b91c1c;
+  --color-success: #15803d;
+
+  --color-nav-bg: #1e293b;
+  --color-nav-text: #ffffff;
+  --color-nav-text-muted: #cbd5e1;
+  --color-nav-button-bg: #334155;
+  --color-nav-button-bg-hover: #475569;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* Opt-in alternative font: <html data-font="alt"> or set on any subtree. */
+[data-font='alt'] {
+  --font-family-base: var(--font-family-alt);
+}
+
+/* Example custom/dark theme. Toggle with <html data-theme="dark">. */
+:root[data-theme='dark'] {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --color-border: #334155;
+
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+
+  --color-nav-bg: #020617;
+  --color-nav-button-bg: #1e293b;
+  --color-nav-button-bg-hover: #334155;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+}
