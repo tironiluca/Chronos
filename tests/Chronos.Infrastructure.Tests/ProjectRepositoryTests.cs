@@ -44,6 +44,26 @@ public class ProjectRepositoryTests : IDisposable
         reloaded!.Tasks.Should().ContainSingle(t => t.Name == "Install PLC");
     }
 
+    // Regression test: adding a task to a Project reloaded from the DB (rather than one just
+    // constructed) previously threw DbUpdateConcurrencyException -- see TrackNewTask.
+    [Fact]
+    public async Task AddTask_ToReloadedProject_ThenSaveChanges_Persists()
+    {
+        var repository = new ProjectRepository(_context);
+        var project = new Project(Guid.NewGuid(), "Line 3 Upgrade", "L3U", new DateOnly(2026, 1, 1));
+        await repository.AddAsync(project);
+        await repository.SaveChangesAsync();
+
+        var reloaded = await repository.GetByIdAsync(project.Id);
+        var task = reloaded!.AddTask("Install PLC", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+        repository.TrackNewTask(task);
+
+        await repository.SaveChangesAsync();
+
+        var reloadedAgain = await repository.GetByIdAsync(project.Id);
+        reloadedAgain!.Tasks.Should().ContainSingle(t => t.Name == "Install PLC");
+    }
+
     public void Dispose()
     {
         _context.Dispose();

@@ -136,6 +136,19 @@ Frontend: `AuthService` holds the session as a signal (persisted to `localStorag
 attaches the bearer token to every request except `/api/auth/*`, `authGuard` protects routes.
 `LoginComponent` is routed at `/login`.
 
+## Projects / Gantt
+
+`POST /api/projects` creates a `Project` (`OrganizationId` from the token) — no extra authorization
+policy today, any authenticated user in the org can create one. `POST /api/projects/{id}/tasks`
+adds a `GanttTask` to it; `GET /api/projects/{id}/tasks` lists them; `PATCH
+/api/projects/{id}/tasks/{taskId}/assignee` (body `{ "userId": <guid-or-null> }`) assigns/unassigns
+a task, first step of the resource-availability epic (see `IMPLEMENTATION_PLAN.md`). All three are
+scoped to the caller's own org via the project (and, for assignment, the target user too) — same
+not-found-for-both-cases pattern as role promotion. See `ProjectRepository.TrackNewTask` for a
+non-obvious EF Core gotcha this surfaced: adding a task to a `Project` reloaded from the DB (not
+just constructed) needs its entry explicitly marked `Added`, or EF's change tracker mistakes the
+new owned entity for an existing one and the save fails.
+
 ## Leave (ferie) workflow
 
 `POST /api/leave-requests` (create, Pending; body is just `{ type, startDate, endDate }` — the

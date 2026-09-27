@@ -67,22 +67,36 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   from `Project.Tasks`/`AddTask`, not proxied through `Project`). No EF configuration change needed
   — `GanttTask` is `OwnsMany`'d (see `ProjectConfiguration`), so a plain scalar property is picked
   up by convention. Migrations regenerated for all three providers (`AddGanttTaskAssignedUser`).
-  **Important gap found while doing this**: there is no Application/Api layer for `GanttTask` at
-  all — `CreateProjectCommand` is the *only* Project-related command/endpoint that exists; there's
-  no way to add/list/reschedule/assign a task over HTTP today (the Gantt UI must be rendering
-  local/sample data, not real backend tasks). `AssignedUserId` is therefore only settable at the
-  domain/test level right now, same shape of problem the FluentValidation pipeline gap was before
-  it got wired up — flagging it explicitly this time instead of leaving it silently inert. The
-  availability query (next step) will need at least a read path for tasks-by-assignee; building
-  real task-management endpoints is a bigger, separate piece of work than this plan bullet
-  originally scoped and should probably be called out to the user before starting it.
-- Last verified: backend **94/94** non-container tests (Domain 26, Application 31, Infrastructure 9,
-  Api 28), frontend 16/16 (unchanged, no frontend work this pass). SqlServer/PostgreSql
+- **Minimal `GanttTask` CRUD** (decided with the user, since none existed at all before this pass —
+  `CreateProjectCommand` used to be the *only* Project-related command/endpoint): `POST`/
+  `GET /api/projects/{projectId}/tasks` (`CreateGanttTaskCommand`/`GetTasksByProjectQuery`) and
+  `PATCH /api/projects/{projectId}/tasks/{taskId}/assignee` (`AssignGanttTaskUserCommand`, body
+  `{ "userId": <guid-or-null> }`). Same cross-org scoping as everywhere else (project must belong
+  to caller's org; an assignee, if given, must too). No extra authorization policy beyond
+  `RequireAuthorization()` — matches `POST /api/projects`, which also has no role restriction today.
+  **Real bug found and fixed along the way**: adding a task to a `Project` *reloaded* from the DB
+  (as opposed to one just constructed in the same save) threw `DbUpdateConcurrencyException`
+  ("expected to affect 1 row(s), but actually affected 0"). Root cause: `GanttTask.Id` is already
+  a non-default `Guid` by the time EF's change tracker discovers it (`Entity.Id = Guid.NewGuid()`
+  runs at construction, not on save); when the new task is reached only via mutating an
+  already-tracked (`Unchanged`) `Project`'s owned collection — never through an explicit `Add()`
+  — EF's default heuristic for graph-discovered entities assumes a non-default key means "already
+  exists" and marks it `Modified` instead of `Added`, so it issues a failing `UPDATE` instead of an
+  `INSERT`. This was never caught before because no test had ever reloaded a `Project` and then
+  added a task to it — the one pre-existing test created and saved both in the same call. Fixed
+  with an explicit `IProjectRepository.TrackNewTask(GanttTask)` (`_context.Entry(task).State =
+  EntityState.Added`), called right after `Project.AddTask(...)` in the handler. Regression test:
+  `ProjectRepositoryTests.AddTask_ToReloadedProject_ThenSaveChanges_Persists`. **Worth checking
+  whether the same class of bug applies to `TaskDependency`** (also `OwnsMany`'d, one level deeper)
+  if/when a command ever adds a dependency to an already-persisted task — not hit yet since no such
+  command exists.
+- Last verified: backend **110/110** non-container tests (Domain 26, Application 41, Infrastructure
+  10, Api 33), frontend 16/16 (unchanged, no frontend work this pass). SqlServer/PostgreSql
   Testcontainers legs and `ng build`/`ng serve` (needs Node ≥22.22) can't run locally in this
   environment — CI is the real verification for both. **CI confirmed green on all four jobs for
   `bf13250`** (Frontend/Sqlite/SqlServer/PostgreSql, checked via the GitHub API); commits since
-  then (`ca11b1e` Department slice, and this `GanttTask.AssignedUserId` work) are pushed/pending
-  push but not yet reconfirmed — check before trusting them.
+  then (Department slice, `GanttTask.AssignedUserId`, and this task-CRUD/EF-bug-fix work) are
+  pushed/pending push but not yet reconfirmed — check before trusting them.
 
 ### Gotchas learned the hard way (still true, worth not re-discovering)
 
@@ -141,11 +155,7 @@ built (see Done); everything else below is still a design sketch, unbuilt.
 
 **Proposed shape:**
 - Domain: `Department` + `User.DepartmentId` — **done** (see Done above).
-- Domain: `GanttTask.AssignedUserId` — **done** (see Done above), but with no Application/Api
-  layer to set it through outside tests (pre-existing gap: `GanttTask` has no CRUD surface at all
-  yet). Worth a decision before the availability query: build minimal task endpoints now, or have
-  the availability query read whatever's in the DB (populated only via direct DB writes/tests for
-  now) and defer full task CRUD.
+- Domain + minimal CRUD: `GanttTask.AssignedUserId` — **done** (see Done above).
 - Domain: new Kanban bounded context — `Board`/`KanbanColumn`/`KanbanCard` (`AssignedUserId`,
   optional link back to a `GanttTask`). Doesn't exist at all yet. **Next up** for domain work.
 - Application: `GET /api/resources/availability` (optional `departmentId` inclusive-of-descendants
@@ -158,16 +168,16 @@ built (see Done); everything else below is still a design sketch, unbuilt.
 ## Suggested next steps, in order
 
 1. Confirm CI is green on all four jobs for the latest pushed commit — SqlServer/PostgreSql
-   Testcontainers legs specifically haven't been reconfirmed since the migrations pass landed.
-2. Decide with the user how to handle the just-found `GanttTask` CRUD gap (see above) before
-   building the availability query against it.
-3. Continue the resource-availability epic: Kanban bounded context next (domain only, same
-   treatment as Department/GanttTask), then the availability query (inclusive-of-descendants
-   department resolution, see design decisions above). Frontend department picker/management UI
-   and the calendar page follow once the availability query exists.
-4. Cross-org Admin visibility for leave requests — same shape of gap as cross-department
+   Testcontainers legs specifically haven't been reconfirmed since the migrations pass landed, and
+   this pass's EF owned-collection fix (see `TrackNewTask` above) is exactly the kind of thing worth
+   double-checking against a real SqlServer/PostgreSql provider, not just Sqlite.
+2. Continue the resource-availability epic: Kanban bounded context next (domain + minimal CRUD,
+   same treatment as Department/GanttTask), then the availability query (inclusive-of-descendants
+   department resolution, see design decisions above). Frontend department/task picker UI and the
+   calendar page follow once the availability query exists.
+3. Cross-org Admin visibility for leave requests — same shape of gap as cross-department
    visibility above, worth solving once rather than building two "who can see whose stuff"
    mechanisms.
-5. Refresh-token flow on the frontend.
-6. Decide on invite/verification gating for org + user self-registration before this goes beyond
+4. Refresh-token flow on the frontend.
+5. Decide on invite/verification gating for org + user self-registration before this goes beyond
    local dev.
