@@ -1,8 +1,9 @@
 # Chronos — Implementation Plan
 
-Status as of commit `bf13250` plus one uncommitted file (below). Working reference for picking
-the project back up — not a spec. History has been compressed into gotchas/decisions worth
-keeping; full narrative for older passes is in git history (`git log --oneline`) if ever needed.
+Status as of commit `885f0a1` plus the Kanban bounded context below (uncommitted). Working
+reference for picking the project back up — not a spec. History has been compressed into
+gotchas/decisions worth keeping; full narrative for older passes is in git history
+(`git log --oneline`) if ever needed.
 
 Multiple Claude sessions work this tree concurrently — if this file disagrees with disk,
 `git status`/`git diff` win.
@@ -90,13 +91,39 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   whether the same class of bug applies to `TaskDependency`** (also `OwnsMany`'d, one level deeper)
   if/when a command ever adds a dependency to an already-persisted task — not hit yet since no such
   command exists.
-- Last verified: backend **110/110** non-container tests (Domain 26, Application 41, Infrastructure
-  10, Api 33), frontend 16/16 (unchanged, no frontend work this pass). SqlServer/PostgreSql
+- **Kanban bounded context** (resource-availability epic, next domain slice after Department/
+  GanttTask): `Board` aggregate (`OrganizationId`, `Name`, `ProjectId` nullable/optional — a board
+  doesn't need a linked Gantt project) owning `KanbanColumn` (`Name`, `Order`) owning `KanbanCard`
+  (`Title`, `AssignedUserId` nullable — same `AssignUser(Guid?)` treatment as
+  `GanttTask.AssignedUserId` — and `GanttTaskId` nullable, an unvalidated plain cross-reference
+  like `GanttTask.ParentTaskId`, deliberately **not** existence-checked since there's no repository
+  method to look up a task by id across an org's projects and the codebase's precedent for this
+  exact kind of optional same-level reference is to leave it unvalidated). Two owned levels deep,
+  same `OwnsMany` pattern as `Project`→`GanttTask`→`TaskDependency` (see `BoardConfiguration`).
+  Full vertical slice: `IBoardRepository`/`BoardRepository`, `CreateBoardCommand` (validates
+  `ProjectId` cross-org like `CreateDepartmentCommand` validates `ParentDepartmentId`),
+  `CreateKanbanColumnCommand`, `CreateKanbanCardCommand`, `AssignKanbanCardUserCommand`,
+  `GetBoardsByOrganizationQuery` (flat summary list) + `GetBoardByIdQuery` (full detail with
+  nested columns/cards — the shape a Kanban view actually needs). Endpoints: `POST`/
+  `GET /api/boards`, `GET /api/boards/{id}`, `POST /api/boards/{id}/columns`, `POST
+  /api/boards/{id}/columns/{columnId}/cards`, `PATCH
+  /api/boards/{id}/columns/{columnId}/cards/{cardId}/assignee` (see README's "Kanban boards"
+  section). Same cross-org scoping and no-extra-policy treatment as Project/GanttTask throughout.
+  **Proactively addressed the `TrackNewTask`-class EF bug two levels deep**: `IMPLEMENTATION_PLAN.md`
+  had flagged (previous entry above) that adding to an owned collection nested inside another
+  owned collection of an already-persisted aggregate was untested for `TaskDependency` — built
+  `BoardRepository.TrackNewColumn`/`TrackNewCard` (same `_context.Entry(x).State =
+  EntityState.Added` fix) from the start here, with regression tests for both: adding a column to
+  a reloaded `Board`, and adding a card to a column of a reloaded `Board`
+  (`BoardRepositoryTests.AddColumn_ToReloadedBoard_ThenSaveChanges_Persists`/
+  `AddCard_ToColumnOfReloadedBoard_ThenSaveChanges_Persists`). Migrations regenerated for all three
+  providers (`AddKanbanBoards`). No frontend yet (not in scope for this pass — see Not started).
+- Last verified: backend **147/147** non-container tests (Domain 37, Application 57, Infrastructure
+  13, Api 40), frontend 16/16 (unchanged, no frontend work this pass). SqlServer/PostgreSql
   Testcontainers legs and `ng build`/`ng serve` (needs Node ≥22.22) can't run locally in this
-  environment — CI is the real verification for both. **CI confirmed green on all four jobs for
-  `bf13250`** (Frontend/Sqlite/SqlServer/PostgreSql, checked via the GitHub API); commits since
-  then (Department slice, `GanttTask.AssignedUserId`, and this task-CRUD/EF-bug-fix work) are
-  pushed/pending push but not yet reconfirmed — check before trusting them.
+  environment — CI is the real verification for both. CI was confirmed green on all four jobs for
+  `885f0a1` (the commit immediately before this Kanban work, checked via the GitHub API on
+  2026-09-27) — the Kanban commit(s) on top of it haven't been pushed/reconfirmed yet.
 
 ### Gotchas learned the hard way (still true, worth not re-discovering)
 
@@ -116,8 +143,6 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 
 ## Known issues (still open)
 
-- SqlServer/PostgreSql migrations + CI not reconfirmed green since the migrations pass — verify
-  before trusting them.
 - Cross-org Admin visibility: every query (leave requests, role-promotion) is scoped to the
   caller's own org, by design so far. No cross-org or cross-department aggregate view exists yet.
 - Org/user self-registration is fully open — anyone can `POST /api/organizations` or register into
@@ -130,15 +155,17 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 - Invite/verification gating for org + user self-registration.
 - E2E in CI — needs API + DB running alongside the dev server; deliberately deferred rather than
   built speculatively. Revisit if E2E starts getting skipped in practice.
-- Resource-availability epic beyond `Department`/`User.DepartmentId`/`GanttTask.AssignedUserId`
-  above (see next section) — Kanban, the availability query, and all frontend for this epic.
+- Resource-availability epic beyond `Department`/`User.DepartmentId`/`GanttTask.AssignedUserId`/
+  Kanban above (see next section) — the availability query, and all frontend for this epic
+  (including a Kanban board UI/component, not just the backend slice).
 
 ## Planned: cross-department resource availability (shared vacation calendar × Gantt × Kanban)
 
 New requirement (settled with the user 2026-09-27): shared vacation calendar across departments of
 a company, cross-referenced against Gantt and a new Kanban tool, so availability reads against
-time/project/department at once. `Department`/`User.DepartmentId` and their CRUD endpoints are
-built (see Done); everything else below is still a design sketch, unbuilt.
+time/project/department at once. `Department`/`User.DepartmentId`, `GanttTask.AssignedUserId`, and
+now the Kanban bounded context are built (see Done); the availability query and all frontend for
+this epic are still a design sketch, unbuilt.
 
 **Settled design decisions** (supersede any earlier open questions):
 - Departments are **nested** (self-referencing `ParentDepartmentId`) — "department Y" in queries
@@ -156,25 +183,27 @@ built (see Done); everything else below is still a design sketch, unbuilt.
 **Proposed shape:**
 - Domain: `Department` + `User.DepartmentId` — **done** (see Done above).
 - Domain + minimal CRUD: `GanttTask.AssignedUserId` — **done** (see Done above).
-- Domain: new Kanban bounded context — `Board`/`KanbanColumn`/`KanbanCard` (`AssignedUserId`,
-  optional link back to a `GanttTask`). Doesn't exist at all yet. **Next up** for domain work.
+- Domain + minimal CRUD: Kanban bounded context — `Board`/`KanbanColumn`/`KanbanCard` — **done**
+  (see Done above).
 - Application: `GET /api/resources/availability` (optional `departmentId` inclusive-of-descendants
   / `projectId` + date range) → per-user approved leave + assigned Gantt tasks + assigned Kanban
   cards overlapping the range. The one query every other view in this epic renders against.
+  **Next up.**
 - Frontend: cross-department calendar page (filterable by department/project) + new Kanban board
   component, cross-linked with the existing `GanttChartComponent`. No frontend exists yet for
-  departments either (no picker/management UI) — needed before the calendar page is usable.
+  departments or Kanban either (no picker/management/board UI) — needed before the calendar page
+  is usable.
 
 ## Suggested next steps, in order
 
-1. Confirm CI is green on all four jobs for the latest pushed commit — SqlServer/PostgreSql
-   Testcontainers legs specifically haven't been reconfirmed since the migrations pass landed, and
-   this pass's EF owned-collection fix (see `TrackNewTask` above) is exactly the kind of thing worth
-   double-checking against a real SqlServer/PostgreSql provider, not just Sqlite.
-2. Continue the resource-availability epic: Kanban bounded context next (domain + minimal CRUD,
-   same treatment as Department/GanttTask), then the availability query (inclusive-of-descendants
-   department resolution, see design decisions above). Frontend department/task picker UI and the
-   calendar page follow once the availability query exists.
+1. Confirm CI is green on all four jobs once the Kanban commit(s) are pushed — this is the first
+   pass to exercise a two-owned-levels-deep `OwnsMany` (`Board`→`KanbanColumn`→`KanbanCard`)
+   against real SqlServer/PostgreSql providers, not just Sqlite.
+2. Continue the resource-availability epic: the availability query next
+   (`GET /api/resources/availability`, inclusive-of-descendants department resolution, see design
+   decisions above) — Department, GanttTask.AssignedUserId, and Kanban are all built, so this is
+   the one piece standing between the backend and a usable frontend. Frontend department/task/
+   board picker UI and the calendar page follow once the availability query exists.
 3. Cross-org Admin visibility for leave requests — same shape of gap as cross-department
    visibility above, worth solving once rather than building two "who can see whose stuff"
    mechanisms.

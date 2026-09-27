@@ -17,6 +17,32 @@ namespace Chronos.Infrastructure.Persistence.Migrations.Sqlite
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
+            modelBuilder.Entity("Chronos.Domain.Kanban.Board", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("Boards", (string)null);
+                });
+
             modelBuilder.Entity("Chronos.Domain.Leave.LeaveRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -345,6 +371,70 @@ namespace Chronos.Infrastructure.Persistence.Migrations.Sqlite
                         .IsUnique();
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("Chronos.Domain.Kanban.Board", b =>
+                {
+                    b.OwnsMany("Chronos.Domain.Kanban.KanbanColumn", "Columns", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("BoardId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("Order")
+                                .HasColumnType("INTEGER");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("BoardId");
+
+                            b1.ToTable("KanbanColumns", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("BoardId");
+
+                            b1.OwnsMany("Chronos.Domain.Kanban.KanbanCard", "Cards", b2 =>
+                                {
+                                    b2.Property<Guid>("Id")
+                                        .ValueGeneratedOnAdd()
+                                        .HasColumnType("TEXT");
+
+                                    b2.Property<Guid?>("AssignedUserId")
+                                        .HasColumnType("TEXT");
+
+                                    b2.Property<Guid>("ColumnId")
+                                        .HasColumnType("TEXT");
+
+                                    b2.Property<Guid?>("GanttTaskId")
+                                        .HasColumnType("TEXT");
+
+                                    b2.Property<string>("Title")
+                                        .IsRequired()
+                                        .HasMaxLength(200)
+                                        .HasColumnType("TEXT");
+
+                                    b2.HasKey("Id");
+
+                                    b2.HasIndex("ColumnId");
+
+                                    b2.ToTable("KanbanCards", (string)null);
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ColumnId");
+                                });
+
+                            b1.Navigation("Cards");
+                        });
+
+                    b.Navigation("Columns");
                 });
 
             modelBuilder.Entity("Chronos.Domain.Projects.Project", b =>

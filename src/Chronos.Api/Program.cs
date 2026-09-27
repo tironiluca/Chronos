@@ -105,6 +105,7 @@ app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();
 app.MapDepartmentEndpoints();
 app.MapProjectEndpoints();
+app.MapKanbanEndpoints();
 app.MapLeaveEndpoints();
 app.MapUserEndpoints();
 

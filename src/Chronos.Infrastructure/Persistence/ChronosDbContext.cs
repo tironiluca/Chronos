@@ -1,3 +1,4 @@
+using Chronos.Domain.Kanban;
 using Chronos.Domain.Leave;
 using Chronos.Domain.Organizations;
 using Chronos.Domain.Projects;
@@ -11,6 +12,7 @@ public class ChronosDbContext : DbContext
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Project> Projects => Set<Project>();
+    public DbSet<Board> Boards => Set<Board>();
     public DbSet<LeaveRequest> LeaveRequests => Set<LeaveRequest>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Right> Rights => Set<Right>();

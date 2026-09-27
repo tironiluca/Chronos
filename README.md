@@ -149,6 +149,22 @@ non-obvious EF Core gotcha this surfaced: adding a task to a `Project` reloaded 
 just constructed) needs its entry explicitly marked `Added`, or EF's change tracker mistakes the
 new owned entity for an existing one and the save fails.
 
+## Kanban boards
+
+`Board` is a standalone aggregate (`OwnsMany` `KanbanColumn`, itself `OwnsMany` `KanbanCard`) —
+same owned-collection modelling as `Project`/`GanttTask`, one level deeper. `POST /api/boards`
+creates a board (`ProjectId` optional — a board doesn't need to be linked to a Gantt project);
+`GET /api/boards` lists the caller's org's boards; `GET /api/boards/{id}` returns one board with
+its columns and cards. `POST /api/boards/{id}/columns` adds a column; `POST
+/api/boards/{id}/columns/{columnId}/cards` adds a card to it (`GanttTaskId` optional, an
+unvalidated plain cross-reference like `GanttTask.ParentTaskId` — mirroring a Kanban card against
+its originating Gantt task without duplicating schedule data); `PATCH
+/api/boards/{id}/columns/{columnId}/cards/{cardId}/assignee` (body `{ "userId": <guid-or-null> }`)
+assigns/unassigns a card, same pattern as task assignment. No extra authorization policy beyond
+authentication, same as Project/GanttTask. `BoardRepository.TrackNewColumn`/`TrackNewCard` apply
+the same explicit-`Added`-marking fix as `ProjectRepository.TrackNewTask`, needed at both owned
+levels here.
+
 ## Leave (ferie) workflow
 
 `POST /api/leave-requests` (create, Pending; body is just `{ type, startDate, endDate }` — the

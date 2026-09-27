@@ -1,4 +1,5 @@
 using Chronos.Application.Common;
+using Chronos.Application.Kanban;
 using Chronos.Application.Leave;
 using Chronos.Application.Organizations;
 using Chronos.Application.Projects;
@@ -43,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
         services.AddScoped<IDepartmentRepository, DepartmentRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<IBoardRepository, BoardRepository>();
         services.AddScoped<ILeaveRequestRepository, LeaveRequestRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRightRepository, RightRepository>();
