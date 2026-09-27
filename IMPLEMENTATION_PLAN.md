@@ -62,12 +62,12 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   constraints/cascades to reason about. Migrations regenerated for all three providers
   (`AddDepartments`). This is the prerequisite step for the resource-availability epic below —
   next is `GanttTask.AssignedUserId`.
-- Last verified (`bf13250` + this pass's Department work, uncommitted at time of writing): backend
-  **91/91** non-container tests (Domain 23, Application 31, Infrastructure 9, Api 28), frontend
-  16/16 (unchanged, no frontend work this pass). SqlServer/PostgreSql Testcontainers legs and
-  `ng build`/`ng serve` (needs Node ≥22.22) can't run locally in this environment — CI is the real
-  verification for both; CI run for `bf13250` was still queued as of this pass, not yet confirmed
-  (see next steps).
+- Last verified: backend **91/91** non-container tests as of `ca11b1e` (Domain 23, Application 31,
+  Infrastructure 9, Api 28), frontend 16/16 (unchanged, no frontend work this pass). SqlServer/
+  PostgreSql Testcontainers legs and `ng build`/`ng serve` (needs Node ≥22.22) can't run locally in
+  this environment — CI is the real verification for both. **CI confirmed green on all four jobs
+  for `bf13250`** (Frontend/Sqlite/SqlServer/PostgreSql, checked via the GitHub API); `ca11b1e`
+  (this pass's Department work) is pushed but not yet reconfirmed — check before trusting it.
 
 ### Gotchas learned the hard way (still true, worth not re-discovering)
 
