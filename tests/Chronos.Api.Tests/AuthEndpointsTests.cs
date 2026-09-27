@@ -15,7 +15,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
 
     public AuthEndpointsTests(WebApplicationFactory<Program> factory)
     {
-        _factory = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        _factory = factory.WithIsolatedSqlite();
         _client = _factory.CreateClient();
     }
 

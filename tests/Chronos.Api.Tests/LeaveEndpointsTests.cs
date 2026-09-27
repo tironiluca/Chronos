@@ -15,7 +15,7 @@ public class LeaveEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
 
     public LeaveEndpointsTests(WebApplicationFactory<Program> factory)
     {
-        _factory = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        _factory = factory.WithIsolatedSqlite();
         _client = _factory.CreateClient();
     }
 

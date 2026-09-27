@@ -14,10 +14,10 @@ public class ProjectEndpointsTests : IClassFixture<WebApplicationFactory<Program
 
     public ProjectEndpointsTests(WebApplicationFactory<Program> factory)
     {
-        // Development environment wires the Sqlite connection string from appsettings.Development.json
-        // so this test needs neither SQL Server nor Docker.
-        _client = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"))
-            .CreateClient();
+        // Development environment wires the Sqlite connection string, overridden to a fresh temp
+        // file per factory (see IsolatedTestFactory) so this test needs neither SQL Server nor
+        // Docker, and doesn't collide with the other Api.Tests classes on disk.
+        _client = factory.WithIsolatedSqlite().CreateClient();
     }
 
     private async Task AuthenticateAsync(Guid organizationId, string email = "project-owner@example.com")

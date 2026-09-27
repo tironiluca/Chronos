@@ -1,9 +1,11 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Chronos.Api.Endpoints;
 using Chronos.Application.Projects.Commands.CreateProject;
 using Chronos.Domain.Users;
 using Chronos.Infrastructure;
 using Chronos.Infrastructure.Security;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
@@ -41,6 +43,12 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole(nameof(UserRole.Approver), nameof(UserRole.Admin)));
 });
 
+// Endpoint request/response records use enums (e.g. LeaveType) by their string name over the
+// wire -- without this, System.Text.Json only accepts their numeric value, and every request
+// sending e.g. "Vacation" fails deserialization with a 400 before it ever reaches a handler.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
@@ -52,6 +60,15 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// No EF Core migrations exist yet (see IMPLEMENTATION_PLAN.md) -- EnsureCreated stands in for
+// them across all three providers so the schema actually exists before the first request. Swap
+// this for a Database.Migrate() call once migrations are introduced.
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<Chronos.Infrastructure.Persistence.ChronosDbContext>();
+    dbContext.Database.EnsureCreated();
+}
 
 if (app.Environment.IsDevelopment())
 {
