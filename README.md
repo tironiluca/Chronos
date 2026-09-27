@@ -120,9 +120,25 @@ npm start
 
 Unit tests:
 ```
-dotnet test
+dotnet test                                          # everything, including SqlServer/PostgreSql
+                                                      # containers (needs Docker running locally)
+dotnet test --filter "Category!=Container"           # fast path, no Docker required
 cd frontend/chronos-web && npm test
 ```
+
+`tests/Chronos.Infrastructure.Tests/Containers/` holds the two tests tagged `Category=Container`:
+the same repository round trips as the Sqlite-backed tests elsewhere in that project, but run
+against a real SQL Server / PostgreSQL container via Testcontainers, to prove the multi-DB
+abstraction actually holds on those engines and not only on Sqlite.
+
+## CI
+
+`.github/workflows/ci.yml` runs a `backend` job as a 3-way matrix (Sqlite, SqlServer, PostgreSql):
+the Sqlite leg runs everything except the `Container`-tagged tests; the other two legs run only
+their respective Testcontainers-backed repository tests (Docker is preinstalled on GitHub-hosted
+runners, no extra setup needed). A separate `frontend` job runs the Jest suite. E2E (Playwright)
+is not wired into CI yet -- it needs the API and a database running alongside the frontend dev
+server, which is more orchestration than this pass covers; run it locally for now.
 
 E2E:
 ```

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (${{ matrix.provider }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [Sqlite, SqlServer, PostgreSql]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # Sqlite/fakes: Domain, Application, and the Sqlite-backed Infrastructure/Api tests --
+      # no Docker container needed, this is the fast leg that runs on every push.
+      - name: Test (Sqlite + fakes)
+        if: matrix.provider == 'Sqlite'
+        run: dotnet test --no-build --configuration Release --filter "Category!=Container"
+
+      # SqlServer/PostgreSql: only the Testcontainers-backed repository round-trip tests run
+      # here (see tests/Chronos.Infrastructure.Tests/Containers) -- they prove the multi-DB
+      # abstraction (AddChronosInfrastructure's provider switch) actually holds against a real
+      # instance of each engine, not just against Sqlite. Docker is preinstalled on GitHub-hosted
+      # ubuntu runners, so Testcontainers needs no extra setup here.
+      - name: Test (SqlServer via Testcontainers)
+        if: matrix.provider == 'SqlServer'
+        run: dotnet test --no-build --configuration Release --filter "FullyQualifiedName~SqlServerRepositoryTests"
+
+      - name: Test (PostgreSql via Testcontainers)
+        if: matrix.provider == 'PostgreSql'
+        run: dotnet test --no-build --configuration Release --filter "FullyQualifiedName~PostgreSqlRepositoryTests"
+
+  frontend:
+    name: Frontend (Jest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/chronos-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No package-lock.json is committed yet (see README) -- npm install rather than npm ci
+      # until dependency versions have been verified against the real Angular 22 release and a
+      # lockfile is checked in.
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run unit tests
+        run: npm test -- --ci
