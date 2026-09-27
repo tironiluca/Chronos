@@ -23,6 +23,7 @@ import { AuthService } from '../../core/auth/auth.service';
           <p class="error">{{ error() }}</p>
         }
         <p><a routerLink="/register">Need an account? Register</a></p>
+        <p><a routerLink="/register-organization">New organization? Register it here</a></p>
       </form>
     </div>
   `,

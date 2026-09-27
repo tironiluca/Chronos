@@ -195,6 +195,61 @@ confirmed by search — so all login is already DB-backed; this is additive, not
   their own organization) — same gap now also applies to the new role-promotion endpoint, by
   design (see "Admin role-promotion endpoint" above); a true cross-org view is still not started.
 
+## Planned: cross-department resource availability (shared vacation calendar × Gantt × Kanban)
+
+New requirement from the user (2026-09-27): a **shared vacation calendar** showing resources
+across every department of the same company, cross-referenced against a **Gantt** view and a new
+**Kanban** tool, so people's availability can be read against time / project / department all at
+once. This is a substantial net-new epic, not a tweak — recorded here as a design sketch, nothing
+below is built yet.
+
+**Checked against the current model — the gaps this needs to close:**
+- **No `Department` concept exists anywhere** (confirmed by grep — zero hits). `User` today only
+  has `OrganizationId`; there's no grouping below the company level, so "across departments of the
+  same company" can't be expressed yet.
+- **Leave visibility has no aggregate/cross-user view at all**, department or otherwise. Every
+  existing leave query is scoped to a single requester or a single approver's own org (see
+  "Cross-org Admin visibility" below, which is the same shape of gap one level up). There is no
+  "everyone in department Y, date range Z" query yet.
+- **`GanttTask` has no assignee.** No `AssignedUserId` (or list thereof) on `GanttTask` — a Gantt
+  task can't be cross-referenced against a specific person's calendar today.
+- **Kanban doesn't exist in the domain at all** (confirmed by grep — no `Kanban`/`Board`/`Card`
+  types anywhere). This is 100% new: board, column, card, and a card assignee.
+- **Leave, Gantt assignment, and Kanban assignment are three unrelated aggregates** with no shared
+  read-model between them — "availability" needs to merge all three per person per date range, and
+  nothing today produces that merged view.
+
+**Design decisions (settled with the user 2026-09-27 — supersede the earlier open questions):**
+- **Departments are nested** (a department can have sub-departments/teams, not just a flat list).
+  `Department` needs a self-referencing `ParentDepartmentId` (nullable) and the availability/
+  calendar queries need to decide whether "department Y" means that department alone or it plus
+  its descendants — treat it as **inclusive of descendants** by default (matches how "resources
+  across departments" is usually meant) unless a future request says otherwise.
+- **Exactly one department per user** — `User.DepartmentId` is a simple 1:1 link, no matrix
+  membership to model.
+- **Kanban boards may stand alone** — `Board.ProjectId` is optional; a department can run a
+  general-purpose board with no linked Gantt project, as well as project-linked ones.
+- **Shared calendar shows approved leave only** — pending requests stay private to the
+  requester/approver until approved, same as today; the cross-department/availability view never
+  surfaces not-yet-approved absences.
+
+**Proposed shape (design sketch, updated for the above — still not built):**
+- Domain: `Department` entity (`OrganizationId`, `Name`, `Code`, `ParentDepartmentId` nullable)
+  alongside `Organization` in `Chronos.Domain.Organizations`; add `DepartmentId` to `User`.
+- Domain: add an assignee to `GanttTask` (`AssignedUserId`, nullable) so tasks can be checked
+  against a person's time.
+- Domain: new `Kanban` bounded context — `Board` (`OrganizationId`, `ProjectId` nullable),
+  `KanbanColumn` (ordered), `KanbanCard` (`BoardId`, `ColumnId`, `Title`, `AssignedUserId`,
+  optionally linked back to a `GanttTask` for traceability between the two views).
+- Application: a read-only availability query — e.g. `GET /api/resources/availability` — taking
+  an optional `departmentId` (inclusive of sub-departments) / `projectId` and a date range,
+  returning per-user **approved** leave, assigned Gantt tasks, and assigned Kanban cards
+  overlapping that range. This is the one query the calendar/Gantt/Kanban combo view renders
+  against; everything else here is just data to feed it.
+- Frontend: a calendar page (shared across departments, not just "my leave") filterable by
+  department (with its sub-departments) and project, plus a new Kanban board component, both
+  cross-linking with the existing `GanttChartComponent`/`IGanttRenderer`.
+
 ## Not started
 
 - **E2E in CI**: needs the API + a database running alongside the frontend dev server, more
@@ -214,7 +269,13 @@ confirmed by search — so all login is already DB-backed; this is additive, not
 2. Confirm CI is green on all four jobs for this pass's commit, same as the previous pass — this
    time the SqlServer/PostgreSql legs are the real first-ever test of the new migrations against
    real containers.
-3. Cross-org Admin visibility for leave requests (and reconsider whether role-promotion should
-   eventually support it too, e.g. a super-admin managing multiple orgs — not needed today).
-4. Refresh-token flow on the frontend.
-5. Decide on open self-registration (invite/verification step) before this goes beyond local dev.
+3. Start the resource-availability epic (design decisions now settled, see above): `Department`
+   entity (with `ParentDepartmentId`) + `User.DepartmentId` first (it's the prerequisite for
+   everything else in that section), then the `GanttTask` assignee, then the availability query,
+   then Kanban (the newest, least validated part of the ask, so build it last once the
+   availability query it needs to plug into already exists).
+4. Cross-org Admin visibility for leave requests — same shape of problem as the new
+   cross-department visibility above, worth solving together rather than building two separate
+   "who can see whose leave" mechanisms.
+5. Refresh-token flow on the frontend.
+6. Decide on open self-registration (invite/verification step) before this goes beyond local dev.

@@ -19,6 +19,7 @@ import { AuthService } from '../../core/auth/auth.service';
             (input)="organizationId.set($any($event.target).value)"
           />
         </label>
+        <p><a routerLink="/register-organization">Setting up a new organization? Register it here</a></p>
         <label>
           Display name
           <input type="text" [value]="displayName()" (input)="displayName.set($any($event.target).value)" />

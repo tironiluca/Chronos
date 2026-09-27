@@ -16,6 +16,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/register.component').then((m) => m.RegisterComponent)
   },
   {
+    path: 'register-organization',
+    loadComponent: () =>
+      import('./features/organizations/register-organization.component').then(
+        (m) => m.RegisterOrganizationComponent
+      )
+  },
+  {
     path: 'leave',
     canActivate: [authGuard],
     loadComponent: () =>

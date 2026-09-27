@@ -92,11 +92,22 @@ Chronos or a commercial license) at that point — not before, since it isn't li
 ## Auth
 
 JWT bearer tokens, issued by `POST /api/auth/login`. `POST /api/auth/register` self-registers
-into an existing `OrganizationId` as an `Employee` (the only role self-registration can create).
-`PATCH /api/users/{id}/role` (`AdminOnly` policy, body `{ "role": "Approver" }`) promotes/demotes
-a user within the caller's own organization — see `PromoteUserRoleCommandHandler`; it's currently
-the only path to an Approver/Admin account besides direct DB writes. Passwords are hashed with
-PBKDF2-SHA256 (`Pbkdf2PasswordHasher`, BCL only, no extra dependency).
+into an existing `OrganizationId` (passed as a string and parsed explicitly in `AuthEndpoints.cs`,
+returning a clean `400` on a malformed GUID rather than an unhandled exception) as an `Employee`
+(the only role self-registration can create). `PATCH /api/users/{id}/role` (`AdminOnly` policy,
+body `{ "role": "Approver" }`) promotes/demotes a user within the caller's own organization — see
+`PromoteUserRoleCommandHandler`; it's currently the only path to an Approver/Admin account besides
+direct DB writes. Passwords are hashed with PBKDF2-SHA256 (`Pbkdf2PasswordHasher`, BCL only, no
+extra dependency).
+
+`GET /api/users/me/rights` returns the caller's granular permission codes, resolved from a
+`Right`/`RoleRight` mapping table (`Chronos.Domain.Users`) seeded per `UserRole`
+(Employee/Approver/Admin) via migration. This is additive alongside the existing role enum, not a
+replacement — `User.Role`, role promotion, and JWT role claims are unaffected.
+
+`POST /api/auth/change-password` (authenticated) rotates a user's password: it blocks reuse of the
+last 5 passwords via a `PasswordHistory` table (one row per superseded hash) and records the new
+supersession on each change.
 
 The token carries `NameIdentifier` (user id), `Role`, and a custom `org` claim (organization id).
 `Chronos.Api.Security.ClaimsPrincipalExtensions` reads these back out. Every endpoint derives
@@ -111,10 +122,8 @@ fixed, non-secret dev/test value. Any other environment must supply it out-of-ba
 user-secrets set Jwt:SigningKey <value>` locally, a `Jwt__SigningKey` environment variable or Key
 Vault reference in real deployments); `Program.cs` fails fast at startup if it's missing.
 
-**Known gaps**, in order of what to fix before real use: there's no refresh-token flow (the
-frontend just treats an expired token as logged out); registration accepts any `OrganizationId`
-from the caller with no invite/verification step; and an Admin only ever sees their own
-organization's leave requests (no cross-org view yet).
+See `IMPLEMENTATION_PLAN.md` for known gaps and open items (validation pipeline, refresh tokens,
+registration, cross-org visibility).
 
 Frontend: `AuthService` holds the session as a signal (persisted to `localStorage`), `authInterceptor`
 attaches the bearer token to every request except `/api/auth/*`, `authGuard` protects routes.
