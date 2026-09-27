@@ -6,7 +6,7 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "jest",
+    "test": "jest --no-cache",
     "test:watch": "jest --watch"
   },
   "dependencies": {
@@ -17,19 +17,22 @@
     "@angular/platform-browser": "^22.0.0",
     "@angular/router": "^22.0.0",
     "frappe-gantt": "^0.6.1",
-    "rxjs": "^7.8.1",
-    "tslib": "^2.6.2",
-    "zone.js": "^0.15.0"
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1",
+    "zone.js": "~0.16.3"
   },
   "devDependencies": {
     "@angular/build": "^22.0.0",
     "@angular/cli": "^22.0.0",
     "@angular/compiler-cli": "^22.0.0",
-    "@types/jest": "^29.5.12",
-    "@types/node": "^20.14.0",
-    "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
-    "jest-preset-angular": "^14.2.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.0.0",
+    "esbuild-register": "^3.6.0",
+    "jest": "^30.0.0",
+    "jest-environment-jsdom": "^30.0.0",
+    "jest-preset-angular": "^17.0.0",
+    "jsdom": "28.1.0",
+    "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",
     "typescript": "~6.0.0"
   }

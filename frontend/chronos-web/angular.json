@@ -15,6 +15,7 @@
             "outputPath": "dist/chronos-web",
             "index": "src/index.html",
             "browser": "src/main.ts",
+            "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
             "styles": ["src/styles.scss"],
             "assets": []
@@ -40,6 +41,9 @@
             "development": { "buildTarget": "chronos-web:build:development" }
           },
           "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test"
         }
       }
     }
