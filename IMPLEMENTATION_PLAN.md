@@ -145,7 +145,49 @@ code. All are fixed in the working tree (uncommitted — see Suggested next step
   `MigrateAsync()` instead of `EnsureCreatedAsync()`, so CI is the actual verification for those
   two providers — confirm CI is green on all four jobs before treating this as fully proven.
 
+## This pass: register crash fix, rights/password-rotation, and a validation gap found along the way
+
+Reported by the user: registering via the frontend crashed with a raw `BadHttpRequestException`
+stack trace instead of a clean error, plus a request to add DB-backed rights/password rotation as
+groundwork for an eventual AD-optional login story (this app has no AD/LDAP integration at all —
+confirmed by search — so all login is already DB-backed; this is additive, not a fallback switch).
+
+- **Register crash fixed**: `POST /api/auth/register` bound `RegisterUserCommand` (`Guid
+  OrganizationId`) directly as the JSON body type. A malformed GUID string fails at
+  `System.Text.Json` deserialization *before* the command ever reaches MediatR/FluentValidation,
+  surfacing as an unhandled exception instead of a 400. Fixed by binding a `string`-typed
+  `RegisterUserBody` DTO in `AuthEndpoints.cs` and parsing explicitly, returning a clean
+  `400 Organization ID must be a valid GUID.` on failure. Regression test added.
+- **Rights table**: new `Right`/`RoleRight` entities (`Chronos.Domain.Users`) mapping the existing
+  `UserRole` enum (Employee/Approver/Admin) to granular permission codes (`leave.approve`,
+  `users.manage`, etc.), seeded via migration with fixed GUIDs. This is additive alongside the
+  enum, not a replacement — `User.Role`, `PromoteUserRoleCommand`, and JWT role claims are
+  untouched. Exposed at `GET /api/users/me/rights`.
+- **Password rotation**: new `PasswordHistory` table (one row per superseded password hash) and
+  `POST /api/auth/change-password` (authenticated), which blocks reuse of the last 5 passwords and
+  records the superseded hash on each change.
+- **Migrations regenerated for all three providers** (`AddRightsAndPasswordHistory` under
+  `Persistence/Migrations/{Sqlite,SqlServer,PostgreSql}/`) per the multi-DB migration process in
+  README.
+- **Found: FluentValidation validators never actually run.** `Program.cs` calls
+  `AddValidatorsFromAssembly`, which registers every `IValidator<T>` in DI — but nothing wires
+  them into a MediatR pipeline behavior (no `IPipelineBehavior<,>` registration anywhere). Every
+  `*CommandValidator` in the codebase (`RegisterUserCommandValidator`,
+  `PromoteUserRoleCommandValidator`, the new `ChangePasswordCommandValidator`, etc.) is dead code —
+  constructed by DI, never invoked. Not fixed this pass: wiring in a real `ValidationBehavior<,>`
+  is a cross-cutting change to shared `Program.cs`/DI that changes behavior for every existing
+  command, risking test breakage across the app, and multiple Claude sessions were editing this
+  repo concurrently during this pass. Worked around locally by adding explicit checks in
+  `ChangePasswordCommandHandler` instead. **This is the top item for a dedicated follow-up.**
+- Full non-container test suite green after this pass (Domain/Application/Infrastructure/Api all
+  passing, including the new register-crash and change-password coverage).
+
 ## Known issues (still open)
+
+- **FluentValidation validators are never invoked** (see above) — every validator in the codebase
+  is currently inert; only handler-level manual checks (where present) actually enforce anything.
+  Needs a proper `IPipelineBehavior<TRequest, TResponse>` registered in `Program.cs`, plus an audit
+  of existing tests that may be (incorrectly) relying on validators *not* running.
 
 - **SqlServer/PostgreSql migrations unverified against real databases locally** (see above) —
   CI needs to confirm this, this pass could only verify Sqlite end-to-end.
@@ -165,10 +207,14 @@ code. All are fixed in the working tree (uncommitted — see Suggested next step
 
 ## Suggested next steps, in order
 
-1. Confirm CI is green on all four jobs for this pass's commit, same as the previous pass — this
+1. Wire a real `ValidationBehavior<TRequest, TResponse>` MediatR pipeline behavior into
+   `Program.cs` so the FluentValidation validators that already exist throughout the codebase
+   actually run — currently none of them do (see above). Audit existing tests afterward for any
+   that assumed invalid input would reach the handler.
+2. Confirm CI is green on all four jobs for this pass's commit, same as the previous pass — this
    time the SqlServer/PostgreSql legs are the real first-ever test of the new migrations against
    real containers.
-2. Cross-org Admin visibility for leave requests (and reconsider whether role-promotion should
+3. Cross-org Admin visibility for leave requests (and reconsider whether role-promotion should
    eventually support it too, e.g. a super-admin managing multiple orgs — not needed today).
-3. Refresh-token flow on the frontend.
-4. Decide on open self-registration (invite/verification step) before this goes beyond local dev.
+4. Refresh-token flow on the frontend.
+5. Decide on open self-registration (invite/verification step) before this goes beyond local dev.

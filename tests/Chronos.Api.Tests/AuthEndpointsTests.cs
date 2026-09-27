@@ -34,6 +34,20 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Register_WithMalformedOrganizationId_ReturnsBadRequest()
+    {
+        var response = await _client.PostAsJsonAsync("/api/auth/register", new
+        {
+            OrganizationId = "not-a-guid",
+            Email = "bad-org-id@example.com",
+            DisplayName = "Bad Org",
+            Password = AuthTestHelper.DefaultPassword
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Register_WithAlreadyRegisteredEmail_ReturnsBadRequest()
     {
         var payload = new

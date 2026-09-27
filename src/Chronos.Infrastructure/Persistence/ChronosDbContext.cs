@@ -12,6 +12,9 @@ public class ChronosDbContext : DbContext
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<LeaveRequest> LeaveRequests => Set<LeaveRequest>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<Right> Rights => Set<Right>();
+    public DbSet<RoleRight> RoleRights => Set<RoleRight>();
+    public DbSet<PasswordHistory> PasswordHistories => Set<PasswordHistory>();
 
     // Non-generic DbContextOptions -- not DbContextOptions&lt;ChronosDbContext&gt; -- so the
     // provider-specific subclasses below (each with their own DbContextOptions&lt;TSelf&gt;) can pass

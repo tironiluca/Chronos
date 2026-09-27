@@ -35,4 +35,12 @@ public class User : AggregateRoot
     {
         Role = role;
     }
+
+    public void ChangePasswordHash(string newPasswordHash)
+    {
+        if (string.IsNullOrWhiteSpace(newPasswordHash))
+            throw new ArgumentException("Password hash is required.", nameof(newPasswordHash));
+
+        PasswordHash = newPasswordHash;
+    }
 }

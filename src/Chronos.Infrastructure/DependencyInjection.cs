@@ -1,5 +1,6 @@
 using Chronos.Application.Common;
 using Chronos.Application.Leave;
+using Chronos.Application.Organizations;
 using Chronos.Application.Projects;
 using Chronos.Application.Users;
 using Chronos.Infrastructure.Persistence;
@@ -39,9 +40,12 @@ public static class DependencyInjection
                 throw new NotSupportedException($"Database provider '{provider}' is not supported.");
         }
 
+        services.AddScoped<IOrganizationRepository, OrganizationRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<ILeaveRequestRepository, LeaveRequestRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRightRepository, RightRepository>();
+        services.AddScoped<IPasswordHistoryRepository, PasswordHistoryRepository>();
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();

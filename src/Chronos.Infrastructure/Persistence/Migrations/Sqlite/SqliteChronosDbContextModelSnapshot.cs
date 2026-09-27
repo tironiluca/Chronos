@@ -115,6 +115,167 @@ namespace Chronos.Infrastructure.Persistence.Migrations.Sqlite
                     b.ToTable("Projects", (string)null);
                 });
 
+            modelBuilder.Entity("Chronos.Domain.Users.PasswordHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.ToTable("PasswordHistories", (string)null);
+                });
+
+            modelBuilder.Entity("Chronos.Domain.Users.Right", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Rights", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111101"),
+                            Code = "leave.view-own",
+                            Description = "View the caller's own leave requests."
+                        },
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111102"),
+                            Code = "leave.request",
+                            Description = "Submit a new leave request."
+                        },
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111103"),
+                            Code = "leave.approve",
+                            Description = "Approve or reject a leave request."
+                        },
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111104"),
+                            Code = "projects.manage",
+                            Description = "Create and manage projects."
+                        },
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111105"),
+                            Code = "users.manage",
+                            Description = "Promote/demote users within the organization."
+                        });
+                });
+
+            modelBuilder.Entity("Chronos.Domain.Users.RoleRight", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RightId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Role", "RightId")
+                        .IsUnique();
+
+                    b.ToTable("RoleRights", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111101"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111101"),
+                            Role = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111102"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111102"),
+                            Role = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111103"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111101"),
+                            Role = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111104"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111102"),
+                            Role = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111105"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111103"),
+                            Role = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111106"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111101"),
+                            Role = 2
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111107"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111102"),
+                            Role = 2
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111108"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111103"),
+                            Role = 2
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111109"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111104"),
+                            Role = 2
+                        },
+                        new
+                        {
+                            Id = new Guid("21111111-1111-1111-1111-111111111110"),
+                            RightId = new Guid("11111111-1111-1111-1111-111111111105"),
+                            Role = 2
+                        });
+                });
+
             modelBuilder.Entity("Chronos.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")

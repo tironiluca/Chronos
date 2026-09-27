@@ -16,4 +16,8 @@ public static class ClaimsPrincipalExtensions
 
     public static bool IsAdmin(this ClaimsPrincipal principal) =>
         principal.IsInRole(nameof(UserRole.Admin));
+
+    public static UserRole GetRole(this ClaimsPrincipal principal) =>
+        Enum.Parse<UserRole>(principal.FindFirstValue(ClaimTypes.Role)
+            ?? throw new InvalidOperationException("Missing role claim."));
 }

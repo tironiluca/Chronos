@@ -94,6 +94,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthEndpoints();
+app.MapOrganizationEndpoints();
 app.MapProjectEndpoints();
 app.MapLeaveEndpoints();
 app.MapUserEndpoints();
