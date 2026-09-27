@@ -1,8 +1,13 @@
 # Chronos — Implementation Plan
 
-Status snapshot as of commit `8d44228` plus this pass's uncommitted fixes (below). This file
+Status snapshot as of commit `d78cd5d` plus this pass's uncommitted work (below). This file
 tracks what's built, what's known broken or unverified, and what's next — a working reference
 for picking the project back up, not a permanent spec.
+
+Note: this repo had several Claude sessions working in the same working tree concurrently during
+this pass (backend items below, plus frontend auth/theming work from other sessions) — if
+anything here looks inconsistent with what's actually on disk, `git status`/`git diff` are more
+current than this file.
 
 ## Stack
 
@@ -34,10 +39,42 @@ for picking the project back up, not a permanent spec.
 - **Frontend Jest config**: dependency versions matched to Angular 22 (`jest-preset-angular` v17
   + `jest`/`jest-environment-jsdom` v30), `angular.json` polyfills fixed, `frappe-gantt` typed
   via an ambient module + `IGanttRenderer` port, `jest.config.ts` extends (not replaces) the
-  preset's `transformIgnorePatterns`. `package-lock.json` is committed; CI uses `npm install`
-  still (see Not started).
+  preset's `transformIgnorePatterns`. `package-lock.json` is committed and CI uses `npm ci`.
 - **Backend actually builds and all non-container tests actually pass** (previously only
   reasoned about statically — see below for what running things for real turned up).
+- **CI confirmed green end-to-end**: after committing the previous pass's fixes, all four CI jobs
+  (Sqlite/SqlServer/PostgreSql/Frontend) passed on `main` at commit `d78cd5d` — including the
+  Testcontainers-backed SqlServer/PostgreSql legs, which couldn't be verified locally (no Docker
+  in this environment) until CI ran them.
+- **Frontend CI now uses `npm ci`** instead of `npm install`, now that `package-lock.json` is
+  committed and verified (`.github/workflows/ci.yml`).
+- **Admin role-promotion endpoint**: `PATCH /api/users/{id}/role` (`AdminOnly` policy), full
+  vertical slice (`PromoteUserRoleCommand`/Handler/Validator under
+  `Chronos.Application/Users/Commands/PromoteUserRole/`, `Chronos.Api/Endpoints/UserEndpoints.cs`).
+  Scoped to the caller's own organization — an Admin can't promote/demote a user in a different
+  org; a user not found *or* in another org gets the same failure message, so the response never
+  leaks which is which. This is now the only way to get an Approver/Admin account besides a direct
+  DB write. Tests at Application (handler) and Api (endpoint, incl. cross-org rejection) layers.
+- **`Jwt:SigningKey` moved out of `appsettings.json`**: only `appsettings.Development.json` now
+  carries a value (a fixed, non-secret dev/test key). Every other environment must supply it via
+  `Jwt__SigningKey` env var, a secret manager, or `dotnet user-secrets`; `Program.cs` throws a
+  clear, actionable error at startup if it's missing — verified by actually starting the app
+  under `ASPNETCORE_ENVIRONMENT=Production` with no key set.
+- **Real EF Core migrations, replacing the `EnsureCreated()` stopgap.** Since EF Core migrations
+  are provider-specific (a `Migration`'s generated SQL is tied to the dialect it was generated
+  against) and this app switches providers at runtime against one shared `DbContext`, a single
+  migrations history can't cover all three. Solution: three thin `ChronosDbContext` subclasses —
+  `SqlServerChronosDbContext`/`SqliteChronosDbContext`/`PostgreSqlChronosDbContext`
+  (`Chronos.Infrastructure/Persistence/`) — each adding nothing but existing so its own migrations
+  (`Persistence/Migrations/<Provider>/`) have somewhere to live; `AddChronosInfrastructure`
+  registers whichever one matches the active `DatabaseProvider` as the concrete implementation
+  behind the base `ChronosDbContext` service type (`services.AddDbContext<ChronosDbContext,
+  TSubclass>(...)`), so nothing upstream needs to know which is active. `Program.cs` now calls
+  `Database.Migrate()` at startup instead of `EnsureCreated()`. See README's new "Migrations"
+  section for how to add a migration going forward (must be regenerated for all three providers).
+  Added `Microsoft.EntityFrameworkCore.Design` to `Chronos.Api`/`Chronos.Infrastructure` and a
+  local tool manifest (`.config/dotnet-tools.json`, pinning `dotnet-ef 10.0.11`) since neither
+  existed before.
 
 ## This pass: found and fixed by actually running the full stack for the first time
 
@@ -86,48 +123,52 @@ code. All are fixed in the working tree (uncommitted — see Suggested next step
    (Angular's documented way to drive signal/required inputs in tests) instead of a host-template
    rebind.
 
-**Verified state after these fixes:**
+**Verified state after the previous pass's fixes:**
 - Backend: `dotnet build` clean, `dotnet test --filter "Category!=Container"` →
-  **50/50 passing** (Domain 14, Application 15, Infrastructure 9, Api 12). SqlServer/PostgreSql
-  Testcontainers-backed tests not run locally (no Docker in this environment) — CI covers them.
+  **50/50 passing** (Domain 14, Application 15, Infrastructure 9, Api 12).
 - Frontend: `npm ci` (627 packages, 0 vulnerabilities) then `npm test -- --ci` →
   **16/16 passing**, 6/6 suites.
 - `ng build` / `ng serve` do **not** run locally: Angular 22's CLI requires Node ≥22.22 and this
   machine has Node 20.20. Not a repo bug — CI already pins Node 22
   (`.github/workflows/ci.yml`). Jest doesn't go through the CLI, so tests are unaffected.
 
-## Known issues (still open, not addressed this pass)
+**Verified state after this pass's work** (role promotion + JWT config + migrations, above):
+- Backend: `dotnet build` clean, `dotnet test --filter "Category!=Container"` →
+  **56/56 passing** (Domain 14, Application 18, Infrastructure 9, Api 15) — the +6 are the new
+  `PromoteUserRoleCommandHandler` and `UserEndpoints` tests.
+- Manual smoke test: fresh `dotnet run` (no pre-existing db file) + `POST /api/auth/register` →
+  `201 Created`, proving `Database.Migrate()` actually creates the schema from the generated
+  migrations on a brand-new database, not just under `EnsureCreated()`'s more forgiving behavior.
+- SqlServer/PostgreSql migrations are generated and inspected (correct provider-specific column
+  types — `uniqueidentifier`/`nvarchar` vs. `uuid`/`character varying`) but **not run against real
+  containers locally** (no Docker in this environment); the Testcontainers-backed tests now call
+  `MigrateAsync()` instead of `EnsureCreatedAsync()`, so CI is the actual verification for those
+  two providers — confirm CI is green on all four jobs before treating this as fully proven.
 
-- **`package-lock.json` is committed but CI still uses `npm install`, not `npm ci`.** Now that
-  the lockfile is real and verified, switch CI to `npm ci` for reproducible installs.
-- **No EF Core migrations.** `EnsureCreated()` (added this pass) is a stopgap: fine for
-  Sqlite/dev, but it can't express schema *changes* over time, and SqlServer/PostgreSql in
-  production would need real migrations before this ships anywhere.
+## Known issues (still open)
+
+- **SqlServer/PostgreSql migrations unverified against real databases locally** (see above) —
+  CI needs to confirm this, this pass could only verify Sqlite end-to-end.
+- **Cross-org Admin visibility** for leave requests (every user, Admin included, only ever sees
+  their own organization) — same gap now also applies to the new role-promotion endpoint, by
+  design (see "Admin role-promotion endpoint" above); a true cross-org view is still not started.
 
 ## Not started
 
 - **E2E in CI**: needs the API + a database running alongside the frontend dev server, more
-  orchestration than covered so far; currently documented as a manual/local-only step.
-- **Cross-org Admin visibility** for leave requests (currently every user, Admin included, only
-  ever sees their own organization).
+  orchestration than covered so far. Decided to keep this local-only/manual for now rather than
+  build that orchestration speculatively — revisit if E2E starts getting skipped in practice
+  because it's not in CI.
 - **Refresh-token flow** on the frontend (an expired JWT is just treated as logged out).
-- **Role promotion** (Employee → Approver/Admin): no admin-only endpoint exists yet; only doable
-  today by writing directly to the database.
-- **`Jwt:SigningKey` in `appsettings.json` is a placeholder** — must move to user-secrets/
-  environment/Key Vault before anything beyond local dev.
 - **Open self-registration** into any `OrganizationId` supplied by the caller — no invite or
   verification step.
 
 ## Suggested next steps, in order
 
-1. Commit this pass's fixes (Program.cs, three Api.Tests files, the new
-   `IsolatedTestFactory`, the rewritten gantt-chart spec), push, confirm CI goes green on all
-   four jobs (Sqlite/SqlServer/PostgreSql/Frontend) — the SqlServer/PostgreSql legs are still
-   unverified locally (no Docker here).
-2. Switch frontend CI from `npm install` to `npm ci` now that the lockfile is trustworthy.
-3. Wire E2E into CI (or explicitly decide it stays local-only for now).
-4. Admin role-promotion endpoint, since it's currently the only way to get an Approver/Admin
-   user outside of direct DB writes (tests already do this directly against `ChronosDbContext`,
-   which is fine for tests but isn't a real operational path).
-5. Move the JWT signing key out of `appsettings.json`.
-6. Introduce real EF Core migrations to replace the `EnsureCreated()` stopgap.
+1. Confirm CI is green on all four jobs for this pass's commit, same as the previous pass — this
+   time the SqlServer/PostgreSql legs are the real first-ever test of the new migrations against
+   real containers.
+2. Cross-org Admin visibility for leave requests (and reconsider whether role-promotion should
+   eventually support it too, e.g. a super-admin managing multiple orgs — not needed today).
+3. Refresh-token flow on the frontend.
+4. Decide on open self-registration (invite/verification step) before this goes beyond local dev.
