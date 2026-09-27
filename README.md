@@ -38,7 +38,7 @@ e2e/
 
 ```json
 {
-  "DatabaseProvider": "SqlServer" // or "Sqlite" / "PostgreSql"
+  "DatabaseProvider": "Sqlite" // or "SqlServer" / "PostgreSql" — Sqlite is the default so the app can be self-hosted with zero external DB setup
 }
 ```
 
@@ -47,6 +47,31 @@ is the single place that branches on this value (`AddChronosInfrastructure`) —
 adding anything provider-specific elsewhere. Avoid provider-specific SQL (raw SQL, date functions) in
 queries so LINQ stays portable across all three; if something is genuinely unavoidable, isolate it
 behind an interface in Application rather than branching inline.
+
+### Migrations
+
+EF Core migrations are provider-specific (a `Migration`'s `Up()`/`Down()` bakes in the target SQL
+dialect), so a single `DbContext` can't hold one shared history across SQL Server/SQLite/PostgreSQL.
+Each provider instead gets its own thin `ChronosDbContext` subclass —
+`SqlServerChronosDbContext`/`SqliteChronosDbContext`/`PostgreSqlChronosDbContext`
+(`src/Chronos.Infrastructure/Persistence/`), adding nothing but existing so its migrations
+(`Persistence/Migrations/<Provider>/`) have somewhere to live. `AddChronosInfrastructure` registers
+whichever subclass matches the active `DatabaseProvider` as the concrete implementation behind the
+base `ChronosDbContext` service type, so repositories/tests never need to know which one is active.
+`Program.cs` calls `Database.Migrate()` at startup (not `EnsureCreated()`), which creates the schema
+from scratch on a fresh database and applies only pending migrations otherwise.
+
+To add a migration after a model change, regenerate it for **all three** providers (repeat with
+`SqlServer/SqliteChronosDbContext`/`SqlServer` swapped in), e.g. for SQLite:
+```
+dotnet ef migrations add <Name> --project src/Chronos.Infrastructure --startup-project src/Chronos.Api \
+  --context SqliteChronosDbContext --output-dir Persistence/Migrations/Sqlite
+```
+For SqlServer/PostgreSql, override the provider the startup project reads at design time, since the
+default is Sqlite: `DatabaseProvider=SqlServer dotnet ef migrations add ... --context
+SqlServerChronosDbContext --output-dir Persistence/Migrations/SqlServer` (same pattern for
+PostgreSql/`PostgreSqlChronosDbContext`). `dotnet-ef` is pinned via the local tool manifest
+(`.config/dotnet-tools.json`) — run `dotnet tool restore` once after cloning.
 
 ## Gantt UI: library choice
 
@@ -67,9 +92,11 @@ Chronos or a commercial license) at that point — not before, since it isn't li
 ## Auth
 
 JWT bearer tokens, issued by `POST /api/auth/login`. `POST /api/auth/register` self-registers
-into an existing `OrganizationId` as an `Employee` (the only role self-registration can create —
-promoting to `Approver`/`Admin` is an admin-only operation, **not implemented yet**). Passwords
-are hashed with PBKDF2-SHA256 (`Pbkdf2PasswordHasher`, BCL only, no extra dependency).
+into an existing `OrganizationId` as an `Employee` (the only role self-registration can create).
+`PATCH /api/users/{id}/role` (`AdminOnly` policy, body `{ "role": "Approver" }`) promotes/demotes
+a user within the caller's own organization — see `PromoteUserRoleCommandHandler`; it's currently
+the only path to an Approver/Admin account besides direct DB writes. Passwords are hashed with
+PBKDF2-SHA256 (`Pbkdf2PasswordHasher`, BCL only, no extra dependency).
 
 The token carries `NameIdentifier` (user id), `Role`, and a custom `org` claim (organization id).
 `Chronos.Api.Security.ClaimsPrincipalExtensions` reads these back out. Every endpoint derives
@@ -79,11 +106,15 @@ in the payload. `/approve` and `/reject` additionally require the `ApproverOrAdm
 `/cancel` allows the original requester or an Admin (checked in `CancelLeaveRequestCommandHandler`,
 not just at the endpoint).
 
-**Known gaps**, in order of what to fix before real use: the `SigningKey` in `appsettings.json`
-is a placeholder and must move to user-secrets/environment/Key Vault before this is anything but
-local dev; there's no refresh-token flow (the frontend just treats an expired token as logged
-out); registration accepts any `OrganizationId` from the caller with no invite/verification step;
-and an Admin only ever sees their own organization's leave requests (no cross-org view yet).
+`Jwt:SigningKey` is **not** in `appsettings.json` — only `appsettings.Development.json` carries a
+fixed, non-secret dev/test value. Any other environment must supply it out-of-band (`dotnet
+user-secrets set Jwt:SigningKey <value>` locally, a `Jwt__SigningKey` environment variable or Key
+Vault reference in real deployments); `Program.cs` fails fast at startup if it's missing.
+
+**Known gaps**, in order of what to fix before real use: there's no refresh-token flow (the
+frontend just treats an expired token as logged out); registration accepts any `OrganizationId`
+from the caller with no invite/verification step; and an Admin only ever sees their own
+organization's leave requests (no cross-org view yet).
 
 Frontend: `AuthService` holds the session as a signal (persisted to `localStorage`), `authInterceptor`
 attaches the bearer token to every request except `/api/auth/*`, `authGuard` protects routes.

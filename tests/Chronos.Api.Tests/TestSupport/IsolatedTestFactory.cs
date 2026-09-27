@@ -25,8 +25,8 @@ public static class IsolatedTestFactory
             .UseEnvironment("Development")
             .ConfigureServices(services =>
             {
-                services.RemoveAll<DbContextOptions<ChronosDbContext>>();
-                services.AddDbContext<ChronosDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
+                services.RemoveAll<DbContextOptions<SqliteChronosDbContext>>();
+                services.AddDbContext<ChronosDbContext, SqliteChronosDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
             }));
     }
 }

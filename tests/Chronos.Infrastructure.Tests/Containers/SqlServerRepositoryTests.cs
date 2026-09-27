@@ -25,12 +25,12 @@ public class SqlServerRepositoryTests : IClassFixture<SqlServerContainerFixture>
 
     public async Task InitializeAsync()
     {
-        var options = new DbContextOptionsBuilder<ChronosDbContext>()
+        var options = new DbContextOptionsBuilder<SqlServerChronosDbContext>()
             .UseSqlServer(_fixture.ConnectionString)
             .Options;
 
-        _context = new ChronosDbContext(options);
-        await _context.Database.EnsureCreatedAsync();
+        _context = new SqlServerChronosDbContext(options);
+        await _context.Database.MigrateAsync();
     }
 
     public Task DisposeAsync()

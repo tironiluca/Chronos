@@ -21,23 +21,23 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString(provider.ToString())
             ?? throw new InvalidOperationException($"Missing connection string for provider '{provider}'.");
 
-        services.AddDbContext<ChronosDbContext>(options =>
+        // Each provider gets its own DbContext subclass purely so it can own its own migrations
+        // history (see ChronosDbContext's constructor comment) -- but everything upstream still
+        // resolves the base ChronosDbContext type via DI, never the concrete subclass.
+        switch (provider)
         {
-            switch (provider)
-            {
-                case DatabaseProvider.SqlServer:
-                    options.UseSqlServer(connectionString);
-                    break;
-                case DatabaseProvider.Sqlite:
-                    options.UseSqlite(connectionString);
-                    break;
-                case DatabaseProvider.PostgreSql:
-                    options.UseNpgsql(connectionString);
-                    break;
-                default:
-                    throw new NotSupportedException($"Database provider '{provider}' is not supported.");
-            }
-        });
+            case DatabaseProvider.SqlServer:
+                services.AddDbContext<ChronosDbContext, SqlServerChronosDbContext>(options => options.UseSqlServer(connectionString));
+                break;
+            case DatabaseProvider.Sqlite:
+                services.AddDbContext<ChronosDbContext, SqliteChronosDbContext>(options => options.UseSqlite(connectionString));
+                break;
+            case DatabaseProvider.PostgreSql:
+                services.AddDbContext<ChronosDbContext, PostgreSqlChronosDbContext>(options => options.UseNpgsql(connectionString));
+                break;
+            default:
+                throw new NotSupportedException($"Database provider '{provider}' is not supported.");
+        }
 
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<ILeaveRequestRepository, LeaveRequestRepository>();

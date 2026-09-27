@@ -1,6 +1,7 @@
 using Chronos.Application.Common;
 using Chronos.Application.Users;
 using Chronos.Application.Users.Commands.Login;
+using Chronos.Application.Users.Commands.PromoteUserRole;
 using Chronos.Application.Users.Commands.RegisterUser;
 using Chronos.Domain.Users;
 using FluentAssertions;
@@ -99,5 +100,55 @@ public class LoginCommandHandlerTests
 
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("Invalid email or password.");
+    }
+}
+
+public class PromoteUserRoleCommandHandlerTests
+{
+    [Fact]
+    public async Task Handle_WithUserInCallerOrganization_ChangesRoleAndPersists()
+    {
+        var organizationId = Guid.NewGuid();
+        var user = new User(organizationId, "employee@example.com", "Employee", "hash");
+        var userRepository = Substitute.For<IUserRepository>();
+        userRepository.GetByIdAsync(user.Id, Arg.Any<CancellationToken>()).Returns(user);
+        var handler = new PromoteUserRoleCommandHandler(userRepository);
+
+        var result = await handler.Handle(
+            new PromoteUserRoleCommand(organizationId, user.Id, UserRole.Approver), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        user.Role.Should().Be(UserRole.Approver);
+        await userRepository.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WithUnknownUser_ReturnsFailureWithoutSaving()
+    {
+        var userRepository = Substitute.For<IUserRepository>();
+        userRepository.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((User?)null);
+        var handler = new PromoteUserRoleCommandHandler(userRepository);
+
+        var result = await handler.Handle(
+            new PromoteUserRoleCommand(Guid.NewGuid(), Guid.NewGuid(), UserRole.Admin), CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        await userRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WithUserInDifferentOrganization_ReturnsFailureWithoutSaving()
+    {
+        var user = new User(Guid.NewGuid(), "employee@example.com", "Employee", "hash");
+        var userRepository = Substitute.For<IUserRepository>();
+        userRepository.GetByIdAsync(user.Id, Arg.Any<CancellationToken>()).Returns(user);
+        var handler = new PromoteUserRoleCommandHandler(userRepository);
+
+        var result = await handler.Handle(
+            new PromoteUserRoleCommand(Guid.NewGuid(), user.Id, UserRole.Admin), CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        user.Role.Should().Be(UserRole.Employee);
+        await userRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

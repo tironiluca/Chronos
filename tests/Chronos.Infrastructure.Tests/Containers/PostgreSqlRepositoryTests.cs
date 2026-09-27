@@ -25,12 +25,12 @@ public class PostgreSqlRepositoryTests : IClassFixture<PostgreSqlContainerFixtur
 
     public async Task InitializeAsync()
     {
-        var options = new DbContextOptionsBuilder<ChronosDbContext>()
+        var options = new DbContextOptionsBuilder<PostgreSqlChronosDbContext>()
             .UseNpgsql(_fixture.ConnectionString)
             .Options;
 
-        _context = new ChronosDbContext(options);
-        await _context.Database.EnsureCreatedAsync();
+        _context = new PostgreSqlChronosDbContext(options);
+        await _context.Database.MigrateAsync();
     }
 
     public Task DisposeAsync()

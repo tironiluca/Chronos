@@ -59,11 +59,8 @@ jobs:
         with:
           node-version: '22'
 
-      # No package-lock.json is committed yet (see README) -- npm install rather than npm ci
-      # until dependency versions have been verified against the real Angular 22 release and a
-      # lockfile is checked in.
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run unit tests
         run: npm test -- --ci

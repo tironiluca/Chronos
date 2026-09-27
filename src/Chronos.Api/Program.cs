@@ -7,6 +7,7 @@ using Chronos.Infrastructure;
 using Chronos.Infrastructure.Security;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +18,15 @@ builder.Services.AddValidatorsFromAssembly(typeof(CreateProjectCommand).Assembly
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException($"Missing '{JwtOptions.SectionName}' configuration section.");
+
+// SigningKey deliberately isn't in appsettings.json -- only appsettings.Development.json carries
+// a (non-secret, dev/test-only) value. Every other environment must supply it out-of-band, e.g.
+// `dotnet user-secrets set Jwt:SigningKey ...` locally, or a Jwt__SigningKey environment variable
+// / Key Vault reference in real deployments -- never a value committed to source control.
+if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey))
+    throw new InvalidOperationException(
+        "Jwt:SigningKey is not configured. Set it via the Jwt__SigningKey environment variable, " +
+        "a secret manager (e.g. Key Vault), or `dotnet user-secrets set Jwt:SigningKey <value>` for local dev.");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -41,6 +51,10 @@ builder.Services.AddAuthorization(options =>
     // and cancel their own, never someone else's, and never approve anything.
     options.AddPolicy("ApproverOrAdmin", policy =>
         policy.RequireRole(nameof(UserRole.Approver), nameof(UserRole.Admin)));
+
+    // Role promotion/demotion is an Admin-only action.
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole(nameof(UserRole.Admin)));
 });
 
 // Endpoint request/response records use enums (e.g. LeaveType) by their string name over the
@@ -61,13 +75,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// No EF Core migrations exist yet (see IMPLEMENTATION_PLAN.md) -- EnsureCreated stands in for
-// them across all three providers so the schema actually exists before the first request. Swap
-// this for a Database.Migrate() call once migrations are introduced.
+// Applies whichever provider's migrations DI resolved ChronosDbContext to (see
+// AddChronosInfrastructure) -- each provider owns its own migrations history, generated against
+// its own DbContext subclass under Chronos.Infrastructure/Persistence/Migrations/<Provider>.
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<Chronos.Infrastructure.Persistence.ChronosDbContext>();
-    dbContext.Database.EnsureCreated();
+    dbContext.Database.Migrate();
 }
 
 if (app.Environment.IsDevelopment())
@@ -82,6 +96,7 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapProjectEndpoints();
 app.MapLeaveEndpoints();
+app.MapUserEndpoints();
 
 app.Run();
 

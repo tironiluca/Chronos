@@ -40,6 +40,19 @@ public static class AuthTestHelper
         return await LoginAsync(client, email);
     }
 
+    public static async Task<string> SeedAndLoginAsAdminAsync(
+        WebApplicationFactory<Program> factory, HttpClient client, Guid organizationId, string email = "admin@example.com")
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ChronosDbContext>();
+        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+
+        dbContext.Users.Add(new User(organizationId, email, "Test Admin", hasher.Hash(DefaultPassword), UserRole.Admin));
+        await dbContext.SaveChangesAsync();
+
+        return await LoginAsync(client, email);
+    }
+
     private static async Task<string> LoginAsync(HttpClient client, string email)
     {
         var response = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = DefaultPassword });

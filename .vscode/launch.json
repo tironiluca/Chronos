@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend (Chronos.Api)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-api",
+      "program": "${workspaceFolder}/src/Chronos.Api/bin/Debug/net10.0/Chronos.Api.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Chronos.Api",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5080"
+      },
+      "console": "internalConsole"
+    },
+    {
+      "name": "Frontend (chronos-web)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:4200",
+      "webRoot": "${workspaceFolder}/frontend/chronos-web",
+      "preLaunchTask": "start-frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack (Backend + Frontend)",
+      "configurations": ["Backend (Chronos.Api)", "Frontend (chronos-web)"],
+      "stopAll": true
+    }
+  ]
+}

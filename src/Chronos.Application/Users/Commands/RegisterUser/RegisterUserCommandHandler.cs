@@ -23,9 +23,9 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, R
 
         var passwordHash = _passwordHasher.Hash(request.Password);
 
-        // Self-registration always starts as Employee. Promoting to Approver/Admin is not
-        // implemented yet -- it needs to be an admin-only operation, not something the
-        // registering client can request for itself. See README.
+        // Self-registration always starts as Employee -- promoting to Approver/Admin is an
+        // admin-only operation (see PromoteUserRoleCommand), never something the registering
+        // client can request for itself.
         var user = new User(request.OrganizationId, request.Email, request.DisplayName, passwordHash);
 
         await _userRepository.AddAsync(user, cancellationToken);
