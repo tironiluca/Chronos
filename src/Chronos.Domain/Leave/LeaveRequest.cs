@@ -48,4 +48,12 @@ public class LeaveRequest : AggregateRoot
         ApproverId = approverId;
         RejectionReason = reason;
     }
+
+    public void Cancel()
+    {
+        if (Status != LeaveStatus.Pending)
+            throw new InvalidOperationException($"Only a Pending request can be cancelled. Current status: {Status}.");
+
+        Status = LeaveStatus.Cancelled;
+    }
 }

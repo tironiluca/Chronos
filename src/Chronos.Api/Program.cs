@@ -27,6 +27,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 app.MapProjectEndpoints();
+app.MapLeaveEndpoints();
 
 app.Run();
 

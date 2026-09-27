@@ -39,4 +39,27 @@ public class LeaveRequestTests
 
         act.Should().Throw<InvalidOperationException>();
     }
+
+    [Fact]
+    public void Cancel_WhenPending_SetsStatusToCancelled()
+    {
+        var request = new LeaveRequest(Guid.NewGuid(), Guid.NewGuid(), LeaveType.Vacation,
+            new DateOnly(2026, 8, 10), new DateOnly(2026, 8, 17));
+
+        request.Cancel();
+
+        request.Status.Should().Be(LeaveStatus.Cancelled);
+    }
+
+    [Fact]
+    public void Cancel_WhenAlreadyApproved_Throws()
+    {
+        var request = new LeaveRequest(Guid.NewGuid(), Guid.NewGuid(), LeaveType.Vacation,
+            new DateOnly(2026, 8, 10), new DateOnly(2026, 8, 17));
+        request.Approve(Guid.NewGuid());
+
+        var act = request.Cancel;
+
+        act.Should().Throw<InvalidOperationException>();
+    }
 }

@@ -1,3 +1,4 @@
+using Chronos.Application.Leave;
 using Chronos.Application.Projects;
 using Chronos.Infrastructure.Persistence;
 using Chronos.Infrastructure.Persistence.Repositories;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<ILeaveRequestRepository, LeaveRequestRepository>();
 
         return services;
     }

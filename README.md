@@ -64,6 +64,21 @@ If a future requirement needs resource histograms, baselines, or critical-path h
 what Frappe Gantt offers, evaluate DHTMLX Gantt Community Edition (GPLv2, requires either open-sourcing
 Chronos or a commercial license) at that point — not before, since it isn't license-cost-free.
 
+## Leave (ferie) workflow
+
+`POST /api/leave-requests` (create, Pending) → `POST /api/leave-requests/{id}/approve`,
+`/reject` (body: `{ approverId, reason }`) or `/cancel`. `GET /api/leave-requests?organizationId=`
+lists an organization's requests. Domain invariants (only a Pending request can be
+approved/rejected/cancelled) are enforced on `LeaveRequest` itself and surfaced as `400` rather
+than a `500` — see `ApproveLeaveRequestCommandHandler` for the try/catch-and-translate pattern
+reused by Reject/Cancel.
+
+Frontend: `LeaveRequestFormComponent` + `LeaveRequestListComponent` (approve/reject/cancel on
+Pending items) are fully unit-tested, and `LeaveRequestsPageComponent` composes them. **Not yet
+wired into `app.routes.ts`**: both `organizationId` and the approver/requester identity
+(`currentUserId`) need a real source, and there's no auth in this scaffold yet. Route it once
+that exists, ideally binding `organizationId` from the URL via `withComponentInputBinding()`.
+
 ## Running locally
 
 Backend:
