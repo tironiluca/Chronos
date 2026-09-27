@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Chronos.Api.Endpoints;
+using Chronos.Application.Common;
 using Chronos.Application.Projects.Commands.CreateProject;
 using Chronos.Domain.Users;
 using Chronos.Infrastructure;
@@ -13,7 +14,14 @@ using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddChronosInfrastructure(builder.Configuration);
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateProjectCommand).Assembly));
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssembly(typeof(CreateProjectCommand).Assembly);
+    // Runs every IValidator<TRequest> registered below before a handler is invoked -- without
+    // this, AddValidatorsFromAssembly only gets validators as far as DI construction; nothing
+    // ever calls Validate/ValidateAsync on them (see ValidationBehavior).
+    cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+});
 builder.Services.AddValidatorsFromAssembly(typeof(CreateProjectCommand).Assembly);
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()

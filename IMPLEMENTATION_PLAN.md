@@ -182,12 +182,27 @@ confirmed by search — so all login is already DB-backed; this is additive, not
 - Full non-container test suite green after this pass (Domain/Application/Infrastructure/Api all
   passing, including the new register-crash and change-password coverage).
 
-## Known issues (still open)
+## This pass: wired the FluentValidation → MediatR pipeline
 
-- **FluentValidation validators are never invoked** (see above) — every validator in the codebase
-  is currently inert; only handler-level manual checks (where present) actually enforce anything.
-  Needs a proper `IPipelineBehavior<TRequest, TResponse>` registered in `Program.cs`, plus an audit
-  of existing tests that may be (incorrectly) relying on validators *not* running.
+Closes the top item from the previous pass. Added `ValidationBehavior<TRequest, TResponse>`
+(`Chronos.Application/Common/ValidationBehavior.cs`), registered via `cfg.AddOpenBehavior(typeof(
+ValidationBehavior<,>))` inside the existing `AddMediatR` call in `Program.cs`. Every request in
+this codebase returns `Result` or `Result<T>` (confirmed by grep — no exceptions), so the behavior
+is constrained to `where TResponse : Result` and builds a typed `Failure(...)` response (via
+reflection for the generic `Result<T>` case, since `T` isn't known at the constraint level) instead
+of ever calling the handler when a validator fails. 4 new unit tests in
+`Chronos.Application.Tests/Common/ValidationBehaviorTests.cs` cover: failing validator short-
+circuits (`Result` and `Result<T>` shapes), passing validator calls through, and no-validators-
+registered calls through. Audited every existing Api-level integration test for a payload that
+relied on invalid input reaching the handler unvalidated (the risk flagged last pass) — found none;
+all payloads used in tests were either fully valid or already caught by the handler-level manual
+guard clauses added while the gap was open (e.g. `RegisterOrganizationCommandHandler`,
+`ChangePasswordCommandHandler`), so those clauses are now redundant defense-in-depth rather than
+load-bearing. Left them in place rather than removing them — out of scope for wiring the pipeline,
+and harmless since the validator now rejects first. Full non-container suite green: **65/65**
+(Domain 14, Application 22, Infrastructure 9, Api 20).
+
+## Known issues (still open)
 
 - **SqlServer/PostgreSql migrations unverified against real databases locally** (see above) —
   CI needs to confirm this, this pass could only verify Sqlite end-to-end.
@@ -262,20 +277,16 @@ below is built yet.
 
 ## Suggested next steps, in order
 
-1. Wire a real `ValidationBehavior<TRequest, TResponse>` MediatR pipeline behavior into
-   `Program.cs` so the FluentValidation validators that already exist throughout the codebase
-   actually run — currently none of them do (see above). Audit existing tests afterward for any
-   that assumed invalid input would reach the handler.
-2. Confirm CI is green on all four jobs for this pass's commit, same as the previous pass — this
+1. Confirm CI is green on all four jobs for this pass's commit, same as the previous pass — this
    time the SqlServer/PostgreSql legs are the real first-ever test of the new migrations against
    real containers.
-3. Start the resource-availability epic (design decisions now settled, see above): `Department`
+2. Start the resource-availability epic (design decisions now settled, see above): `Department`
    entity (with `ParentDepartmentId`) + `User.DepartmentId` first (it's the prerequisite for
    everything else in that section), then the `GanttTask` assignee, then the availability query,
    then Kanban (the newest, least validated part of the ask, so build it last once the
    availability query it needs to plug into already exists).
-4. Cross-org Admin visibility for leave requests — same shape of problem as the new
+3. Cross-org Admin visibility for leave requests — same shape of problem as the new
    cross-department visibility above, worth solving together rather than building two separate
    "who can see whose leave" mechanisms.
-5. Refresh-token flow on the frontend.
-6. Decide on open self-registration (invite/verification step) before this goes beyond local dev.
+4. Refresh-token flow on the frontend.
+5. Decide on open self-registration (invite/verification step) before this goes beyond local dev.
