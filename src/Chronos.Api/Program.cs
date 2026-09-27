@@ -103,6 +103,7 @@ app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();
+app.MapDepartmentEndpoints();
 app.MapProjectEndpoints();
 app.MapLeaveEndpoints();
 app.MapUserEndpoints();

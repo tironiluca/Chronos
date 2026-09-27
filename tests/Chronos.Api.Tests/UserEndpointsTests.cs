@@ -71,4 +71,60 @@ public class UserEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task AssignDepartment_AsAdmin_AssignsUserToDepartmentInSameOrganization()
+    {
+        var organizationId = Guid.NewGuid();
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new
+        {
+            OrganizationId = organizationId,
+            Email = "assign-dept-me@example.com",
+            DisplayName = "Assign Dept Me",
+            Password = AuthTestHelper.DefaultPassword
+        });
+        var userId = await registerResponse.Content.ReadFromJsonAsync<Guid>();
+
+        UseToken(await AuthTestHelper.SeedAndLoginAsAdminAsync(_factory, _client, organizationId, "admin-3@example.com"));
+        var departmentResponse = await _client.PostAsJsonAsync("/api/departments", new { Name = "Engineering", Code = "ENG" });
+        var departmentId = await departmentResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var response = await _client.PatchAsJsonAsync($"/api/users/{userId}/department", new { DepartmentId = departmentId });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task AssignDepartment_AsPlainEmployee_ReturnsForbidden()
+    {
+        var organizationId = Guid.NewGuid();
+        UseToken(await AuthTestHelper.RegisterAndLoginAsync(_client, organizationId, "employee-5@example.com"));
+
+        var response = await _client.PatchAsJsonAsync($"/api/users/{Guid.NewGuid()}/department", new { DepartmentId = (Guid?)null });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task AssignDepartment_WithDepartmentInAnotherOrganization_ReturnsBadRequest()
+    {
+        var organizationId = Guid.NewGuid();
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new
+        {
+            OrganizationId = organizationId,
+            Email = "assign-dept-cross-org@example.com",
+            DisplayName = "Assign Dept Cross Org",
+            Password = AuthTestHelper.DefaultPassword
+        });
+        var userId = await registerResponse.Content.ReadFromJsonAsync<Guid>();
+
+        UseToken(await AuthTestHelper.SeedAndLoginAsAdminAsync(_factory, _client, Guid.NewGuid(), "admin-4@example.com"));
+        var departmentResponse = await _client.PostAsJsonAsync("/api/departments", new { Name = "Other Org Dept", Code = "OOD" });
+        var departmentId = await departmentResponse.Content.ReadFromJsonAsync<Guid>();
+
+        UseToken(await AuthTestHelper.SeedAndLoginAsAdminAsync(_factory, _client, organizationId, "admin-5@example.com"));
+        var response = await _client.PatchAsJsonAsync($"/api/users/{userId}/department", new { DepartmentId = departmentId });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
 }

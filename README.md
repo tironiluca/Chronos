@@ -109,6 +109,13 @@ replacement — `User.Role`, role promotion, and JWT role claims are unaffected.
 last 5 passwords via a `PasswordHistory` table (one row per superseded hash) and records the new
 supersession on each change.
 
+`POST /api/departments` (`AdminOnly`, scoped to the caller's own org) creates a `Department`
+(optionally nested under another via `ParentDepartmentId`); `GET /api/departments` lists the
+caller's org's departments and is open to any authenticated user (not Admin-only — needed to
+populate department pickers). `PATCH /api/users/{id}/department` (`AdminOnly`) assigns or
+unassigns (`null`) a user's department, same cross-org scoping as role promotion. First piece of
+the resource-availability epic — see `IMPLEMENTATION_PLAN.md`.
+
 The token carries `NameIdentifier` (user id), `Role`, and a custom `org` claim (organization id).
 `Chronos.Api.Security.ClaimsPrincipalExtensions` reads these back out. Every endpoint derives
 `OrganizationId`/requester/approver identity from the token, never from the request body — a

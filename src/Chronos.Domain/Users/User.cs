@@ -10,6 +10,10 @@ public class User : AggregateRoot
     public string PasswordHash { get; private set; } = default!;
     public UserRole Role { get; private set; }
 
+    // Nullable: a user isn't required to belong to a department (registration doesn't ask for
+    // one yet), but at most one -- see the resource-availability epic in IMPLEMENTATION_PLAN.md.
+    public Guid? DepartmentId { get; private set; }
+
     private User() { } // EF Core
 
     // passwordHash is expected to already be hashed (Application calls IPasswordHasher before
@@ -34,6 +38,12 @@ public class User : AggregateRoot
     public void ChangeRole(UserRole role)
     {
         Role = role;
+    }
+
+    // null unassigns the user from any department.
+    public void AssignDepartment(Guid? departmentId)
+    {
+        DepartmentId = departmentId;
     }
 
     public void ChangePasswordHash(string newPasswordHash)

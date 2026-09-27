@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using MediatR;
 using Chronos.Api.Security;
+using Chronos.Application.Users.Commands.AssignUserDepartment;
 using Chronos.Application.Users.Commands.PromoteUserRole;
 using Chronos.Application.Users.Queries.GetRightsForRole;
 using Chronos.Domain.Users;
@@ -29,7 +30,16 @@ public static class UserEndpoints
             var result = await sender.Send(new GetRightsForRoleQuery(user.GetRole()));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
         });
+
+        // Admin-only, same cross-org shape as role promotion above: a null DepartmentId
+        // unassigns the user, and the target department (if any) must belong to the caller's org.
+        group.MapPatch("/{id:guid}/department", async (Guid id, AssignUserDepartmentBody body, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new AssignUserDepartmentCommand(user.GetOrganizationId(), id, body.DepartmentId));
+            return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
+        }).RequireAuthorization("AdminOnly");
     }
 
     public record ChangeUserRoleBody(UserRole Role);
+    public record AssignUserDepartmentBody(Guid? DepartmentId);
 }

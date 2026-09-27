@@ -47,4 +47,34 @@ public class UserTests
 
         user.Role.Should().Be(UserRole.Approver);
     }
+
+    [Fact]
+    public void Constructor_DefaultsDepartmentIdToNull()
+    {
+        var user = new User(Guid.NewGuid(), "luca@example.com", "Luca", "hash");
+
+        user.DepartmentId.Should().BeNull();
+    }
+
+    [Fact]
+    public void AssignDepartment_SetsDepartmentId()
+    {
+        var user = new User(Guid.NewGuid(), "luca@example.com", "Luca", "hash");
+        var departmentId = Guid.NewGuid();
+
+        user.AssignDepartment(departmentId);
+
+        user.DepartmentId.Should().Be(departmentId);
+    }
+
+    [Fact]
+    public void AssignDepartment_WithNull_UnassignsDepartment()
+    {
+        var user = new User(Guid.NewGuid(), "luca@example.com", "Luca", "hash");
+        user.AssignDepartment(Guid.NewGuid());
+
+        user.AssignDepartment(null);
+
+        user.DepartmentId.Should().BeNull();
+    }
 }

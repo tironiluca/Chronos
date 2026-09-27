@@ -9,6 +9,7 @@ namespace Chronos.Infrastructure.Persistence;
 public class ChronosDbContext : DbContext
 {
     public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<Department> Departments => Set<Department>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<LeaveRequest> LeaveRequests => Set<LeaveRequest>();
     public DbSet<User> Users => Set<User>();
