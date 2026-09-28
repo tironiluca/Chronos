@@ -23,6 +23,12 @@ public class ProjectRepository : IProjectRepository
             .Where(p => p.OrganizationId == organizationId)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Project>> GetDetailedByOrganizationAsync(Guid organizationId, CancellationToken cancellationToken = default) =>
+        await _context.Projects
+            .Include(p => p.Tasks)
+            .Where(p => p.OrganizationId == organizationId)
+            .ToListAsync(cancellationToken);
+
     public async Task AddAsync(Project project, CancellationToken cancellationToken = default) =>
         await _context.Projects.AddAsync(project, cancellationToken);
 

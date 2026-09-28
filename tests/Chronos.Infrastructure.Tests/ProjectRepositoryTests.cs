@@ -64,6 +64,25 @@ public class ProjectRepositoryTests : IDisposable
         reloadedAgain!.Tasks.Should().ContainSingle(t => t.Name == "Install PLC");
     }
 
+    // Regression coverage for the resource-availability query (see IMPLEMENTATION_PLAN.md), which
+    // needs every project's tasks loaded across a whole organization in one call.
+    [Fact]
+    public async Task GetDetailedByOrganizationAsync_EagerLoadsTasksAcrossAllProjectsInTheOrganization()
+    {
+        var organizationId = Guid.NewGuid();
+        var repository = new ProjectRepository(_context);
+        var project = new Project(organizationId, "Line 3 Upgrade", "L3U", new DateOnly(2026, 1, 1));
+        project.AddTask("Install PLC", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+        await repository.AddAsync(project);
+        await repository.AddAsync(new Project(Guid.NewGuid(), "Other Org Project", "OOP", new DateOnly(2026, 1, 1)));
+        await repository.SaveChangesAsync();
+
+        var found = await repository.GetDetailedByOrganizationAsync(organizationId);
+
+        found.Should().ContainSingle(p => p.Id == project.Id)
+            .Which.Tasks.Should().ContainSingle(t => t.Name == "Install PLC");
+    }
+
     public void Dispose()
     {
         _context.Dispose();

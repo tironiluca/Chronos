@@ -179,6 +179,23 @@ Frontend: `LeaveRequestFormComponent` + `LeaveRequestListComponent` (approve/rej
 Pending items), composed by `LeaveRequestsPageComponent`, routed at `/leave` behind `authGuard`.
 Neither component takes an identity input — both rely on the JWT via `authInterceptor`.
 
+## Resource availability
+
+`GET /api/resources/availability?from=<date>&to=<date>&departmentId=<guid>&projectId=<guid>`
+(`departmentId`/`projectId` optional) is the cross-department resource-availability epic's one
+read: for every in-scope user, it returns approved leave, assigned Gantt tasks, and assigned
+Kanban cards that overlap `[from, to]`. No extra authorization policy beyond authentication, same
+as the Boards/Departments list endpoints.
+
+`departmentId` is inclusive of descendants (a nested department's sub-departments' users are
+included too), resolved in memory from `GET /api/departments`' flat list rather than a recursive
+query. `projectId`, if given, narrows which tasks/boards are considered (that project's tasks;
+boards linked to it via `Board.ProjectId`) but never narrows the leave side, since leave isn't
+project-scoped. Only `Approved` leave is ever included — pending stays private, matching the
+existing `/api/leave-requests` visibility rules. Kanban cards have no schedule of their own, so
+they're included whenever assigned, regardless of `from`/`to`. See `IMPLEMENTATION_PLAN.md` for
+the epic's full design decisions and remaining frontend work.
+
 ## Running locally
 
 Backend:

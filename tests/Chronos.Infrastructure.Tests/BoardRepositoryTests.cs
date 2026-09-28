@@ -89,6 +89,26 @@ public class BoardRepositoryTests : IDisposable
         reloadedAgain!.Columns.Single().Cards.Should().ContainSingle(c => c.Title == "Install PLC");
     }
 
+    // Regression coverage for the resource-availability query (see IMPLEMENTATION_PLAN.md), which
+    // needs every board's columns/cards loaded across a whole organization in one call.
+    [Fact]
+    public async Task GetDetailedByOrganizationAsync_EagerLoadsColumnsAndCardsAcrossAllBoardsInTheOrganization()
+    {
+        var organizationId = Guid.NewGuid();
+        var repository = new BoardRepository(_context);
+        var board = new Board(organizationId, "Line 3 Kanban");
+        board.AddColumn("To Do", 0).AddCard("Install PLC");
+        await repository.AddAsync(board);
+        await repository.AddAsync(new Board(Guid.NewGuid(), "Other Org Board"));
+        await repository.SaveChangesAsync();
+
+        var found = await repository.GetDetailedByOrganizationAsync(organizationId);
+
+        found.Should().ContainSingle(b => b.Id == board.Id)
+            .Which.Columns.Should().ContainSingle(c => c.Name == "To Do")
+            .Which.Cards.Should().ContainSingle(c => c.Title == "Install PLC");
+    }
+
     public void Dispose()
     {
         _context.Dispose();

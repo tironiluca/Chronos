@@ -24,6 +24,13 @@ public class BoardRepository : IBoardRepository
             .Where(b => b.OrganizationId == organizationId)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Board>> GetDetailedByOrganizationAsync(Guid organizationId, CancellationToken cancellationToken = default) =>
+        await _context.Boards
+            .Include(b => b.Columns)
+            .ThenInclude(c => c.Cards)
+            .Where(b => b.OrganizationId == organizationId)
+            .ToListAsync(cancellationToken);
+
     public async Task AddAsync(Board board, CancellationToken cancellationToken = default) =>
         await _context.Boards.AddAsync(board, cancellationToken);
 

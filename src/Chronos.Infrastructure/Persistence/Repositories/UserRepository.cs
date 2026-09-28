@@ -22,6 +22,11 @@ public class UserRepository : IUserRepository
         return _context.Users.FirstOrDefaultAsync(u => u.Email == normalized, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<User>> GetByOrganizationAsync(Guid organizationId, CancellationToken cancellationToken = default) =>
+        await _context.Users
+            .Where(u => u.OrganizationId == organizationId)
+            .ToListAsync(cancellationToken);
+
     public async Task AddAsync(User user, CancellationToken cancellationToken = default) =>
         await _context.Users.AddAsync(user, cancellationToken);
 

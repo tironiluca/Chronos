@@ -48,6 +48,20 @@ public class UserRepositoryTests : IDisposable
         found.Should().BeNull();
     }
 
+    [Fact]
+    public async Task GetByOrganizationAsync_OnlyReturnsUsersInThatOrganization()
+    {
+        var organizationId = Guid.NewGuid();
+        var repository = new UserRepository(_context);
+        await repository.AddAsync(new User(organizationId, "in-org@example.com", "In Org", "hash"));
+        await repository.AddAsync(new User(Guid.NewGuid(), "other-org@example.com", "Other Org", "hash"));
+        await repository.SaveChangesAsync();
+
+        var found = await repository.GetByOrganizationAsync(organizationId);
+
+        found.Should().ContainSingle(u => u.Email == "in-org@example.com");
+    }
+
     public void Dispose()
     {
         _context.Dispose();

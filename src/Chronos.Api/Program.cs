@@ -108,6 +108,7 @@ app.MapProjectEndpoints();
 app.MapKanbanEndpoints();
 app.MapLeaveEndpoints();
 app.MapUserEndpoints();
+app.MapResourceAvailabilityEndpoints();
 
 app.Run();
 
