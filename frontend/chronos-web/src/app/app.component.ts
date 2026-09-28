@@ -11,6 +11,9 @@ import { AuthService } from './core/auth/auth.service';
       <nav class="app-nav">
         <span class="brand">Chronos</span>
         <a routerLink="/leave">Leave</a>
+        <a routerLink="/availability">Availability</a>
+        <a routerLink="/departments">Departments</a>
+        <a routerLink="/boards">Boards</a>
         <span class="spacer"></span>
         <span class="user">{{ authService.displayName() }}</span>
         <button type="button" (click)="authService.logout()">Log out</button>

@@ -35,6 +35,28 @@ export const routes: Routes = [
       import('./features/gantt/gantt-chart.component').then((m) => m.GanttChartComponent)
   },
   {
+    path: 'departments',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/departments/department-management-page.component').then(
+        (m) => m.DepartmentManagementPageComponent
+      )
+  },
+  {
+    path: 'boards',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/kanban/kanban-boards-page.component').then((m) => m.KanbanBoardsPageComponent)
+  },
+  {
+    path: 'availability',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/availability/availability-calendar-page.component').then(
+        (m) => m.AvailabilityCalendarPageComponent
+      )
+  },
+  {
     path: '**',
     redirectTo: 'leave'
   }
