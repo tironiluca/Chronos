@@ -91,10 +91,17 @@ Chronos or a commercial license) at that point — not before, since it isn't li
 
 ## Auth
 
+`POST /api/organizations` (body `{ "name", "code" }`, open/unauthenticated) creates an
+`Organization` — someone has to be able to stand up the first one before anyone can self-register
+a user into it. Like `/api/auth/register`, it's intentionally open with no invite/verification
+step; fine for local dev, not for a real deployment (see `IMPLEMENTATION_PLAN.md`'s Known issues).
+
 JWT bearer tokens, issued by `POST /api/auth/login`. `POST /api/auth/register` self-registers
 into an existing `OrganizationId` (passed as a string and parsed explicitly in `AuthEndpoints.cs`,
 returning a clean `400` on a malformed GUID rather than an unhandled exception) as an `Employee`
-(the only role self-registration can create). `PATCH /api/users/{id}/role` (`AdminOnly` policy,
+(the only role self-registration can create). `GET /api/users?email=<email>` (`AdminOnly`) resolves
+an email to that user's id/role/department within the caller's own org — the id the endpoints
+below need, without direct DB access. `PATCH /api/users/{id}/role` (`AdminOnly` policy,
 body `{ "role": "Approver" }`) promotes/demotes a user within the caller's own organization — see
 `PromoteUserRoleCommandHandler`; it's currently the only path to an Approver/Admin account besides
 direct DB writes. Passwords are hashed with PBKDF2-SHA256 (`Pbkdf2PasswordHasher`, BCL only, no
@@ -163,7 +170,7 @@ its originating Gantt task without duplicating schedule data); `PATCH
 assigns/unassigns a card, same pattern as task assignment. No extra authorization policy beyond
 authentication, same as Project/GanttTask. `BoardRepository.TrackNewColumn`/`TrackNewCard` apply
 the same explicit-`Added`-marking fix as `ProjectRepository.TrackNewTask`, needed at both owned
-levels here.
+levels here. Backend only — no frontend yet (see `IMPLEMENTATION_PLAN.md`).
 
 ## Leave (ferie) workflow
 
@@ -193,8 +200,9 @@ query. `projectId`, if given, narrows which tasks/boards are considered (that pr
 boards linked to it via `Board.ProjectId`) but never narrows the leave side, since leave isn't
 project-scoped. Only `Approved` leave is ever included — pending stays private, matching the
 existing `/api/leave-requests` visibility rules. Kanban cards have no schedule of their own, so
-they're included whenever assigned, regardless of `from`/`to`. See `IMPLEMENTATION_PLAN.md` for
-the epic's full design decisions and remaining frontend work.
+they're included whenever assigned, regardless of `from`/`to`. Backend only — no frontend yet
+(no department/Kanban picker UI, no calendar page). See `IMPLEMENTATION_PLAN.md` for the epic's
+full design decisions and remaining frontend work.
 
 ## Running locally
 

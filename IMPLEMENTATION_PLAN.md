@@ -31,6 +31,10 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   flow. Intentionally open/ungated (see Known issues).
 - **Admin role-promotion**: `PATCH /api/users/{id}/role` (`AdminOnly`), scoped to caller's own org
   (cross-org target = same not-found error, doesn't leak existence).
+- **`GET /api/users?email=<email>`** (`AdminOnly`, scoped to caller's org): resolves an email to
+  `UserDto` (`Id`/`Email`/`DisplayName`/`Role`/`DepartmentId`) — the id role-promotion/department
+  assignment need, without direct DB access. Same cross-org not-found shape as everywhere else.
+  `GetUserByEmailQuery`/Handler/Validator in `Chronos.Application.Users.Queries.GetUserByEmail`.
 - **Rights + password rotation**: `Right`/`RoleRight` tables (`UserRole` → permission codes,
   additive, doesn't touch `User.Role`/JWT claims), `GET /api/users/me/rights`. `PasswordHistory`
   blocks reuse of last 5 passwords (`POST /api/auth/change-password`).
@@ -114,10 +118,11 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
     From`) — every other validator so far was command-only; nothing in `ValidationBehavior`
     actually required that, it just hadn't come up yet.
   - No frontend yet (see Planned section below).
-- Last verified (2026-09-28): backend 164/164 non-container tests (Domain 37, Application 64,
-  Infrastructure 16, Api 47), frontend 18/18 locally, **plus CI green on all four jobs for
-  `78169b2`** (Backend Sqlite/SqlServer/PostgreSql + Frontend Jest, confirmed via GitHub
-  check-runs API) — first real proof the new cross-aggregate query works against real
+- Last verified (2026-09-28): backend 167/167 non-container tests (Domain 37, Application 67,
+  Infrastructure 16, Api 50 — the +3/+3 over the availability-query counts is the `GET
+  /api/users?email=` lookup endpoint above), frontend 18/18 locally, **plus CI green on all four
+  jobs for `78169b2`** (Backend Sqlite/SqlServer/PostgreSql + Frontend Jest, confirmed via GitHub
+  check-runs API) — first real proof the cross-aggregate availability query works against real
   SqlServer/PostgreSql, not just Sqlite.
 
 ### Gotchas learned the hard way (still true, worth not re-discovering)
@@ -178,6 +183,18 @@ done — see Done above. Only the frontend for this epic is still unbuilt.
   `GET /api/resources/availability`) + Kanban board component, cross-linked with the existing
   `GanttChartComponent`. No frontend exists yet for departments or Kanban either (no
   picker/management/board UI) — needed before the calendar page is usable. **Next up.**
+- **New story: leave calendar as an employee × day grid.** Render the shared vacation calendar
+  as a grid — rows are employees, columns are the days of a single month — so overlapping leave
+  across people is visible at a glance (the thing a list view of `ApprovedLeave` per user hides).
+  Paginated one month at a time (prev/next month, not infinite scroll), since a full org × full
+  year grid doesn't fit/scale. Data source is the existing `GET /api/resources/availability`
+  (`ApprovedLeave` per user) — call it with `from`/`to` set to the visible month's bounds, refetch
+  on month navigation. Each employee row's cells shade for days covered by an approved leave range
+  (handle ranges spanning outside the visible month at the edges). Reuses the same
+  department/project filters as the calendar page above rather than being a separate filter UI.
+  Sequence after the department/Kanban picker UI (this story needs a department filter to be
+  useful for larger orgs) but can land before or alongside the Gantt/Kanban cross-linking, since
+  it only depends on `ApprovedLeave`, not `AssignedTasks`/`AssignedCards`.
 
 ## Suggested next steps, in order
 
@@ -190,6 +207,8 @@ done — see Done above. Only the frontend for this epic is still unbuilt.
    departments or Kanban yet) + the cross-department calendar page rendering
    `GET /api/resources/availability` + a Kanban board component, cross-linked with the existing
    `GanttChartComponent`. The one piece standing between this epic and being user-usable.
+   Includes the employee × day leave grid story (see Planned section) for spotting overlapping
+   leave within a month.
 4. Cross-org Admin visibility for leave requests — same shape of gap as cross-department
    visibility above, worth solving once rather than building two "who can see whose stuff"
    mechanisms.

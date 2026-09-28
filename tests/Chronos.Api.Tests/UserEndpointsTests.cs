@@ -106,6 +106,50 @@ public class UserEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task GetUserByEmail_AsAdmin_ReturnsTheUserInSameOrganization()
+    {
+        var organizationId = Guid.NewGuid();
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new
+        {
+            OrganizationId = organizationId,
+            Email = "lookup-me@example.com",
+            DisplayName = "Lookup Me",
+            Password = AuthTestHelper.DefaultPassword
+        });
+        var userId = await registerResponse.Content.ReadFromJsonAsync<Guid>();
+
+        UseToken(await AuthTestHelper.SeedAndLoginAsAdminAsync(_factory, _client, organizationId, "admin-lookup-1@example.com"));
+
+        var response = await _client.GetAsync("/api/users?email=lookup-me@example.com");
+        var json = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        json.Should().Contain(userId.ToString());
+    }
+
+    [Fact]
+    public async Task GetUserByEmail_AsPlainEmployee_ReturnsForbidden()
+    {
+        var organizationId = Guid.NewGuid();
+        UseToken(await AuthTestHelper.RegisterAndLoginAsync(_client, organizationId, "employee-6@example.com"));
+
+        var response = await _client.GetAsync("/api/users?email=employee-6@example.com");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetUserByEmail_ForUserInAnotherOrganization_ReturnsBadRequest()
+    {
+        UseToken(await AuthTestHelper.RegisterAndLoginAsync(_client, Guid.NewGuid(), "lookup-other-org@example.com"));
+
+        UseToken(await AuthTestHelper.SeedAndLoginAsAdminAsync(_factory, _client, Guid.NewGuid(), "admin-lookup-2@example.com"));
+        var response = await _client.GetAsync("/api/users?email=lookup-other-org@example.com");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task AssignDepartment_WithDepartmentInAnotherOrganization_ReturnsBadRequest()
     {
         var organizationId = Guid.NewGuid();

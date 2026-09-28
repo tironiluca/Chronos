@@ -4,6 +4,7 @@ using Chronos.Api.Security;
 using Chronos.Application.Users.Commands.AssignUserDepartment;
 using Chronos.Application.Users.Commands.PromoteUserRole;
 using Chronos.Application.Users.Queries.GetRightsForRole;
+using Chronos.Application.Users.Queries.GetUserByEmail;
 using Chronos.Domain.Users;
 
 namespace Chronos.Api.Endpoints;
@@ -13,6 +14,16 @@ public static class UserEndpoints
     public static void MapUserEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/users").WithTags("Users").RequireAuthorization();
+
+        // Admin-only, scoped to the caller's own org -- same sensitivity as role promotion/
+        // department assignment below (reveals a user's id/role/department by email), so gated
+        // the same way. Lets an Admin resolve an email to the id the role/department endpoints
+        // need, without direct DB access.
+        group.MapGet("/", async (string email, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new GetUserByEmailQuery(user.GetOrganizationId(), email));
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
+        }).RequireAuthorization("AdminOnly");
 
         // Admin-only: the caller's own organization is always used as the scope, so an Admin can
         // never promote/demote a user belonging to a different organization (see
