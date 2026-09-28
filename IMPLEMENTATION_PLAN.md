@@ -1,10 +1,9 @@
 # Chronos — Implementation Plan
 
-Status as of the resource-availability query (`GET /api/resources/availability`, step 4 of the
-resource-availability epic, not yet committed as of 2026-09-28 — see git status/diff for the
-authoritative state). Working reference for picking the project back up — not a spec. Compressed
-to gotchas/decisions worth keeping; full narrative is in git history (`git log --oneline`) if ever
-needed.
+Status as of commit `78169b2` (resource-availability query, step 4 of the resource-availability
+epic, pushed — matches `origin/main`, tree clean as of 2026-09-28). Working reference for picking
+the project back up — not a spec. Compressed to gotchas/decisions worth keeping; full narrative is
+in git history (`git log --oneline`) if ever needed.
 
 Multiple Claude sessions work this tree concurrently — if this file disagrees with disk,
 `git status`/`git diff` win.
@@ -116,9 +115,10 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
     actually required that, it just hadn't come up yet.
   - No frontend yet (see Planned section below).
 - Last verified (2026-09-28): backend 164/164 non-container tests (Domain 37, Application 64,
-  Infrastructure 16, Api 47), frontend 18/18. SqlServer/PostgreSql Testcontainers legs and `ng
-  build`/`ng serve` (needs Node ≥22.22) can't run locally in this environment — CI is the real
-  verification for both, not yet run against this uncommitted change.
+  Infrastructure 16, Api 47), frontend 18/18 locally, **plus CI green on all four jobs for
+  `78169b2`** (Backend Sqlite/SqlServer/PostgreSql + Frontend Jest, confirmed via GitHub
+  check-runs API) — first real proof the new cross-aggregate query works against real
+  SqlServer/PostgreSql, not just Sqlite.
 
 ### Gotchas learned the hard way (still true, worth not re-discovering)
 
@@ -183,9 +183,9 @@ done — see Done above. Only the frontend for this epic is still unbuilt.
 
 1. ~~Reconfirm CI is green on all four jobs for `b922aa7`~~ — **done 2026-09-28**, confirmed via
    GitHub check-runs API: Backend (Sqlite/SqlServer/PostgreSql) + Frontend (Jest) all green.
-2. ~~The resource-availability query~~ — **done 2026-09-28** (see Done above), not yet committed/
-   pushed/CI-verified. Commit it, push, and reconfirm CI green (first pass exercising the new
-   cross-aggregate query against real SqlServer/PostgreSql providers, not just Sqlite).
+2. ~~The resource-availability query~~ — **done, pushed, and CI-green 2026-09-28** (`78169b2`, see
+   Done above) — first pass exercising the new cross-aggregate query against real
+   SqlServer/PostgreSql providers, not just Sqlite.
 3. Resource-availability epic frontend: department/task/board picker UI (none exists for
    departments or Kanban yet) + the cross-department calendar page rendering
    `GET /api/resources/availability` + a Kanban board component, cross-linked with the existing
