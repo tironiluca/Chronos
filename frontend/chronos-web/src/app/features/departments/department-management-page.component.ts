@@ -11,32 +11,41 @@ import { DepartmentPickerComponent } from './department-picker.component';
   standalone: true,
   imports: [DepartmentPickerComponent],
   template: `
-    <h1>Departments</h1>
+    <div class="page">
+      <header class="page-header">
+        <h1>Departments</h1>
+      </header>
 
-    <form (submit)="onSubmit($event)">
-      <label>
-        Name
-        <input type="text" [value]="name()" (input)="name.set($any($event.target).value)" />
-      </label>
-      <label>
-        Code
-        <input type="text" [value]="code()" (input)="code.set($any($event.target).value)" />
-      </label>
-      <label>
-        Parent department
-        <chronos-department-picker
-          [selectedId]="parentDepartmentId()"
-          [allOptionLabel]="'None (top-level)'"
-          (selectionChange)="parentDepartmentId.set($event)" />
-      </label>
-      <button type="submit" [disabled]="submitting()">Create department</button>
-      @if (error()) {
-        <p class="error">{{ error() }}</p>
-      }
-    </form>
+      <section class="card">
+        <h2>New department</h2>
+        <form (submit)="onSubmit($event)">
+          <label>
+            Name
+            <input type="text" [value]="name()" (input)="name.set($any($event.target).value)" />
+          </label>
+          <label>
+            Code
+            <input type="text" [value]="code()" (input)="code.set($any($event.target).value)" />
+          </label>
+          <label>
+            Parent department
+            <chronos-department-picker
+              [selectedId]="parentDepartmentId()"
+              [allOptionLabel]="'None (top-level)'"
+              (selectionChange)="parentDepartmentId.set($event)" />
+          </label>
+          <button type="submit" [disabled]="submitting()">Create department</button>
+          @if (error()) {
+            <p class="error">{{ error() }}</p>
+          }
+        </form>
+      </section>
 
-    <h2>Existing departments</h2>
-    <chronos-department-picker #list [includeAllOption]="false" />
+      <section class="card">
+        <h2>Existing departments</h2>
+        <chronos-department-picker #list [includeAllOption]="false" />
+      </section>
+    </div>
   `
 })
 export class DepartmentManagementPageComponent {

@@ -43,7 +43,7 @@ function flattenTree(departments: DepartmentDto[]): DepartmentOption[] {
       }
     </select>
     @if (resource.isLoading()) {
-      <span>Loading departments...</span>
+      <span class="empty-state">Loading departments...</span>
     }
     @if (resource.error()) {
       <span class="error">Could not load departments.</span>

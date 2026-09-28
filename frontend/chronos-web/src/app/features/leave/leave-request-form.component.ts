@@ -31,6 +31,16 @@ import { LeaveType } from '../../core/api/leave.model';
         <p class="error">{{ error() }}</p>
       }
     </form>
+  `,
+  styles: `
+    form {
+      align-items: flex-end;
+    }
+
+    .error {
+      flex-basis: 100%;
+      margin: 0;
+    }
   `
 })
 export class LeaveRequestFormComponent {

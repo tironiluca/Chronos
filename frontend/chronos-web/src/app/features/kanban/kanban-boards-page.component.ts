@@ -10,33 +10,68 @@ import { KanbanBoardComponent } from './kanban-board.component';
   standalone: true,
   imports: [KanbanBoardComponent],
   template: `
-    <h1>Kanban boards</h1>
+    <div class="page">
+      <header class="page-header">
+        <h1>Kanban boards</h1>
+      </header>
 
-    <form (submit)="onCreateBoard($event)">
-      <input
-        type="text"
-        placeholder="New board name"
-        [value]="newBoardName()"
-        (input)="newBoardName.set($any($event.target).value)" />
-      <button type="submit" [disabled]="submitting()">Create board</button>
-      @if (error()) {
-        <p class="error">{{ error() }}</p>
+      <form class="toolbar" (submit)="onCreateBoard($event)">
+        <input
+          type="text"
+          placeholder="New board name"
+          [value]="newBoardName()"
+          (input)="newBoardName.set($any($event.target).value)" />
+        <button type="submit" [disabled]="submitting()">Create board</button>
+        @if (error()) {
+          <p class="error">{{ error() }}</p>
+        }
+      </form>
+
+      @if (resource.isLoading()) {
+        <p class="empty-state">Loading boards...</p>
       }
-    </form>
+      <ul class="board-chips">
+        @for (board of resource.value(); track board.id) {
+          <li>
+            <button
+              type="button"
+              class="chip"
+              [class.chip-active]="selectedBoardId() === board.id"
+              (click)="selectedBoardId.set(board.id)">
+              {{ board.name }}
+            </button>
+          </li>
+        } @empty {
+          <li class="empty-state">No boards yet — create one above.</li>
+        }
+      </ul>
 
-    @if (resource.isLoading()) {
-      <p>Loading boards...</p>
+      @if (selectedBoardId(); as boardId) {
+        <chronos-kanban-board [boardId]="boardId" />
+      }
+    </div>
+  `,
+  styles: `
+    .board-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
     }
-    <ul>
-      @for (board of resource.value(); track board.id) {
-        <li>
-          <button (click)="selectedBoardId.set(board.id)">{{ board.name }}</button>
-        </li>
-      }
-    </ul>
 
-    @if (selectedBoardId(); as boardId) {
-      <chronos-kanban-board [boardId]="boardId" />
+    .chip {
+      border-radius: 999px;
+      padding: 0.45rem 1rem;
+    }
+
+    .chip-active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: var(--color-primary-contrast);
+
+      &:hover:not(:disabled) {
+        background: var(--color-primary-hover);
+        border-color: var(--color-primary-hover);
+      }
     }
   `
 })

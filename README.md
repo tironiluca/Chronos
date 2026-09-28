@@ -160,7 +160,9 @@ new owned entity for an existing one and the save fails.
 
 `Board` is a standalone aggregate (`OwnsMany` `KanbanColumn`, itself `OwnsMany` `KanbanCard`) —
 same owned-collection modelling as `Project`/`GanttTask`, one level deeper. `POST /api/boards`
-creates a board (`ProjectId` optional — a board doesn't need to be linked to a Gantt project);
+creates a board (`ProjectId` optional — a board doesn't need to be linked to a Gantt project),
+seeded with the standard Kanban model (`To Do`/`In Progress`/`Done` columns, in that order) rather
+than starting empty — see `CreateBoardCommandHandler`;
 `GET /api/boards` lists the caller's org's boards; `GET /api/boards/{id}` returns one board with
 its columns and cards. `POST /api/boards/{id}/columns` adds a column; `POST
 /api/boards/{id}/columns/{columnId}/cards` adds a card to it (`GanttTaskId` optional, an

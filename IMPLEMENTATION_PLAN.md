@@ -195,6 +195,28 @@ done — see Done above. Only the frontend for this epic is still unbuilt.
   Sequence after the department/Kanban picker UI (this story needs a department filter to be
   useful for larger orgs) but can land before or alongside the Gantt/Kanban cross-linking, since
   it only depends on `ApprovedLeave`, not `AssignedTasks`/`AssignedCards`.
+- **New story: multi-project calendar as a project × week-number grid.** Same "overlap made
+  visible" idea as the employee × day leave grid above, but the other axis: rows are **projects**,
+  columns are **ISO week numbers** (not days — a quarter/half-year of days wouldn't fit a screen
+  the way a month of days does) so cross-project scheduling load is visible at a glance. Each cell
+  shades/summarizes that project's `GanttTask` coverage for the week (e.g. count of tasks
+  overlapping the week). Paginated by quarter (prev/next), not infinite scroll — same pagination
+  shape as the leave grid, different unit.
+  - **Data-source gap, unlike the leave grid**: no existing endpoint fits. `GET
+    /api/resources/availability` is per-*user*, not per-project, and there is no `GET
+    /api/projects` list endpoint at all yet (only `POST /api/projects` and per-project `GET
+    /api/projects/{id}/tasks`). Needs a new query — e.g. `GetProjectsByOrganizationQuery` — reusing
+    `IProjectRepository.GetDetailedByOrganizationAsync` (`.Include(p => p.Tasks)`, already added
+    for the availability query, see Done above) rather than a new repository method. Bucket task
+    date ranges (`GanttTask.StartDate`/`EndDate`) into ISO week columns client-side, same
+    "no server-side date bucketing" precedent as the leave grid (which buckets `ApprovedLeave`
+    ranges into day columns client-side from raw data).
+  - Department filter doesn't apply here (projects aren't department-scoped) — only a
+    project-subset filter, if any, reusing whatever picker pattern the department/Kanban picker
+    UI establishes.
+  - Independent of the employee × day leave grid (different data, different new query) — can land
+    before, after, or alongside it, but both should share HTTP client/grid-rendering conventions
+    with the cross-department calendar page for consistency.
 
 ## Suggested next steps, in order
 

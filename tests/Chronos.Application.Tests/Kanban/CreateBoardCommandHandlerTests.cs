@@ -1,3 +1,4 @@
+using System.Linq;
 using Chronos.Application.Kanban;
 using Chronos.Application.Kanban.Commands.CreateBoard;
 using Chronos.Application.Projects;
@@ -24,6 +25,23 @@ public class CreateBoardCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         await boardRepository.Received(1).AddAsync(Arg.Is<Board>(b => b.Id == result.Value), Arg.Any<CancellationToken>());
         await boardRepository.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_CreatesBoardWithStandardKanbanColumns()
+    {
+        var organizationId = Guid.NewGuid();
+        var boardRepository = Substitute.For<IBoardRepository>();
+        var projectRepository = Substitute.For<IProjectRepository>();
+        var handler = new CreateBoardCommandHandler(boardRepository, projectRepository);
+
+        await handler.Handle(new CreateBoardCommand(organizationId, "Line 3 Kanban", null), CancellationToken.None);
+
+        await boardRepository.Received(1).AddAsync(
+            Arg.Is<Board>(b => b.Columns.Count == 3
+                && b.Columns.Select(c => c.Name).SequenceEqual(new[] { "To Do", "In Progress", "Done" })
+                && b.Columns.Select(c => c.Order).SequenceEqual(new[] { 0, 1, 2 })),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

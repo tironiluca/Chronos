@@ -9,9 +9,19 @@ import { LeaveRequestListComponent } from './leave-request-list.component';
   standalone: true,
   imports: [LeaveRequestFormComponent, LeaveRequestListComponent],
   template: `
-    <h1>Leave requests</h1>
-    <chronos-leave-request-form (created)="list.refresh()" />
-    <chronos-leave-request-list #list />
+    <div class="page">
+      <header class="page-header">
+        <h1>Leave requests</h1>
+      </header>
+      <section class="card">
+        <h2>New request</h2>
+        <chronos-leave-request-form (created)="list.refresh()" />
+      </section>
+      <section class="card">
+        <h2>Your requests</h2>
+        <chronos-leave-request-list #list />
+      </section>
+    </div>
   `
 })
 export class LeaveRequestsPageComponent {}

@@ -7,8 +7,12 @@ import { FrappeGanttRenderer } from './frappe-gantt-renderer';
   selector: 'chronos-gantt-chart',
   standalone: true,
   providers: [{ provide: GANTT_RENDERER, useClass: FrappeGanttRenderer }],
-  template: `<div #container class="gantt-container"></div>`,
-  styles: [`.gantt-container { width: 100%; overflow-x: auto; }`]
+  template: `
+    <div class="page">
+      <div #container class="gantt-container card table-scroll"></div>
+    </div>
+  `,
+  styles: [`.gantt-container { width: 100%; }`]
 })
 export class GanttChartComponent {
   tasks = input.required<GanttTaskDto[]>();

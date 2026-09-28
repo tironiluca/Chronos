@@ -3,52 +3,60 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg);
+  background:
+    radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 45%),
+    radial-gradient(circle at 85% 80%, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 45%),
+    var(--color-bg);
+  padding: var(--space-5);
 }
 
 .auth-card {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  width: 320px;
-  padding: 2rem;
-  border-radius: var(--radius-md);
+  gap: var(--space-3);
+  width: 340px;
+  padding: var(--space-6) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
   background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   font-family: var(--font-family-base);
 
   h1 {
-    margin: 0 0 0.5rem;
-    font-size: 1.25rem;
+    margin: 0 0 var(--space-2);
+    font-size: var(--font-size-xl);
     color: var(--color-text);
   }
 
   label {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.875rem;
+    gap: var(--space-1);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     color: var(--color-text);
   }
 
   input {
-    padding: 0.5rem;
+    padding: 0.6rem 0.7rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
-    font-size: 1rem;
+    font-size: var(--font-size-base);
     font-family: inherit;
   }
 
   button {
-    margin-top: 0.5rem;
-    padding: 0.6rem;
+    margin-top: var(--space-2);
+    padding: 0.65rem;
     border: none;
     border-radius: var(--radius-sm);
     background: var(--color-primary);
     color: var(--color-primary-contrast);
-    font-size: 1rem;
+    font-size: var(--font-size-base);
+    font-weight: 600;
     font-family: inherit;
     cursor: pointer;
+    transition: background var(--transition-fast);
 
     &:hover:not(:disabled) {
       background: var(--color-primary-hover);
@@ -61,17 +69,24 @@
   }
 
   .error {
-    color: var(--color-danger);
-    font-size: 0.875rem;
+    margin: 0;
   }
 
   .success {
-    color: var(--color-success);
-    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  p {
+    margin: 0;
   }
 
   a {
     color: var(--color-primary);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
   }
 }
