@@ -171,4 +171,38 @@ public class UserEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task GetDirectory_AsPlainEmployee_ListsOnlyOwnOrganization_WithoutEmailOrRole()
+    {
+        var organizationId = Guid.NewGuid();
+        await AuthTestHelper.RegisterAndLoginAsync(_client, Guid.NewGuid(), "directory-outsider@example.com");
+        await _client.PostAsJsonAsync("/api/auth/register", new
+        {
+            OrganizationId = organizationId,
+            Email = "directory-colleague@example.com",
+            DisplayName = "Colleague",
+            Password = AuthTestHelper.DefaultPassword
+        });
+        UseToken(await AuthTestHelper.RegisterAndLoginAsync(_client, organizationId, "directory-employee@example.com"));
+
+        var response = await _client.GetAsync("/api/users/directory");
+        var json = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadFromJsonAsync<List<DirectoryEntryResponse>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().HaveCount(2);
+        body!.Should().Contain(e => e.DisplayName == "Colleague");
+        json.Should().NotContain("@example.com").And.NotContain("\"role\"");
+    }
+
+    [Fact]
+    public async Task GetDirectory_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await _client.GetAsync("/api/users/directory");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    private record DirectoryEntryResponse(Guid Id, string DisplayName, Guid? DepartmentId);
 }
