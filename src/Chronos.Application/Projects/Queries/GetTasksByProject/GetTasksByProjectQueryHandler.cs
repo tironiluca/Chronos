@@ -19,9 +19,7 @@ public class GetTasksByProjectQueryHandler : IRequestHandler<GetTasksByProjectQu
         if (project is null || project.OrganizationId != request.CallerOrganizationId)
             return Result.Failure<IReadOnlyList<GanttTaskDto>>($"Project '{request.ProjectId}' was not found.");
 
-        var dtos = project.Tasks
-            .Select(t => new GanttTaskDto(t.Id, t.ProjectId, t.Name, t.StartDate, t.EndDate, t.ProgressPercent, t.ParentTaskId, t.AssignedUserId))
-            .ToList();
+        var dtos = project.Tasks.Select(GanttTaskDto.From).ToList();
 
         return Result.Success<IReadOnlyList<GanttTaskDto>>(dtos);
     }
