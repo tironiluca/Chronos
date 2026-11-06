@@ -141,4 +141,132 @@ public class ProjectTaskEndpointsTests : IClassFixture<WebApplicationFactory<Pro
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    private async Task<Guid> CreateTaskAsync(Guid projectId, string name, DateOnly start, DateOnly end) =>
+        await (await _client.PostAsJsonAsync($"/api/projects/{projectId}/tasks", new { Name = name, StartDate = start, EndDate = end }))
+            .Content.ReadFromJsonAsync<Guid>();
+
+    private async Task<System.Text.Json.JsonElement> GetTaskAsync(Guid projectId, Guid taskId)
+    {
+        var tasks = await _client.GetFromJsonAsync<List<System.Text.Json.JsonElement>>($"/api/projects/{projectId}/tasks");
+        return tasks!.Single(t => t.GetProperty("id").GetGuid() == taskId);
+    }
+
+    [Fact]
+    public async Task PatchSchedule_ThenPatchProgress_PersistsBoth()
+    {
+        var projectId = await AuthenticateAndCreateProjectAsync(Guid.NewGuid(), "task-editor-1@example.com");
+        var taskId = await CreateTaskAsync(projectId, "Install PLC", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+
+        var schedule = await _client.PatchAsJsonAsync($"/api/projects/{projectId}/tasks/{taskId}/schedule", new
+        {
+            StartDate = new DateOnly(2026, 2, 2),
+            EndDate = new DateOnly(2026, 2, 6)
+        });
+        var progress = await _client.PatchAsJsonAsync($"/api/projects/{projectId}/tasks/{taskId}/progress", new { ProgressPercent = 60 });
+
+        schedule.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        progress.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var task = await GetTaskAsync(projectId, taskId);
+        task.GetProperty("startDate").GetString().Should().Be("2026-02-02");
+        task.GetProperty("endDate").GetString().Should().Be("2026-02-06");
+        task.GetProperty("progressPercent").GetInt32().Should().Be(60);
+    }
+
+    [Fact]
+    public async Task PatchSchedule_WithEndBeforeStart_ReturnsBadRequest()
+    {
+        var projectId = await AuthenticateAndCreateProjectAsync(Guid.NewGuid(), "task-editor-2@example.com");
+        var taskId = await CreateTaskAsync(projectId, "Install PLC", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+
+        var response = await _client.PatchAsJsonAsync($"/api/projects/{projectId}/tasks/{taskId}/schedule", new
+        {
+            StartDate = new DateOnly(2026, 2, 6),
+            EndDate = new DateOnly(2026, 2, 2)
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PatchProgress_OutOfRange_ReturnsBadRequest()
+    {
+        var projectId = await AuthenticateAndCreateProjectAsync(Guid.NewGuid(), "task-editor-3@example.com");
+        var taskId = await CreateTaskAsync(projectId, "Install PLC", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+
+        var response = await _client.PatchAsJsonAsync($"/api/projects/{projectId}/tasks/{taskId}/progress", new { ProgressPercent = 101 });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PatchSchedule_ForProjectInAnotherOrganization_ReturnsBadRequest()
+    {
+        var projectId = await AuthenticateAndCreateProjectAsync(Guid.NewGuid(), "task-editor-4@example.com");
+        var taskId = await CreateTaskAsync(projectId, "Install PLC", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+        var token = await AuthTestHelper.RegisterAndLoginAsync(_client, Guid.NewGuid(), "task-editor-intruder@example.com");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _client.PatchAsJsonAsync($"/api/projects/{projectId}/tasks/{taskId}/schedule", new
+        {
+            StartDate = new DateOnly(2026, 2, 2),
+            EndDate = new DateOnly(2026, 2, 6)
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PostDependency_ThenDelete_RoundTripsThroughTaskDependencies()
+    {
+        var projectId = await AuthenticateAndCreateProjectAsync(Guid.NewGuid(), "task-editor-5@example.com");
+        var design = await CreateTaskAsync(projectId, "Design", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+        var build = await CreateTaskAsync(projectId, "Build", new DateOnly(2026, 1, 12), new DateOnly(2026, 1, 20));
+
+        var added = await _client.PostAsJsonAsync($"/api/projects/{projectId}/tasks/{build}/dependencies", new
+        {
+            PredecessorTaskId = design,
+            Type = "FinishToStart",
+            LagDays = 1
+        });
+
+        added.StatusCode.Should().Be(HttpStatusCode.Created);
+        (await GetTaskAsync(projectId, build)).GetProperty("dependencies").EnumerateArray()
+            .Select(d => d.GetGuid()).Should().Equal(design);
+
+        var removed = await _client.DeleteAsync($"/api/projects/{projectId}/tasks/{build}/dependencies/{design}");
+
+        removed.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await GetTaskAsync(projectId, build)).GetProperty("dependencies").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task PostDependency_ThatWouldCreateACycle_ReturnsBadRequest()
+    {
+        var projectId = await AuthenticateAndCreateProjectAsync(Guid.NewGuid(), "task-editor-6@example.com");
+        var design = await CreateTaskAsync(projectId, "Design", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+        var build = await CreateTaskAsync(projectId, "Build", new DateOnly(2026, 1, 12), new DateOnly(2026, 1, 20));
+        await _client.PostAsJsonAsync($"/api/projects/{projectId}/tasks/{build}/dependencies", new { PredecessorTaskId = design });
+
+        var response = await _client.PostAsJsonAsync($"/api/projects/{projectId}/tasks/{design}/dependencies", new { PredecessorTaskId = build });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("cycle");
+    }
+
+    [Fact]
+    public async Task PostDependency_OnPredecessorFromAnotherProject_ReturnsBadRequest()
+    {
+        var projectId = await AuthenticateAndCreateProjectAsync(Guid.NewGuid(), "task-editor-7@example.com");
+        var build = await CreateTaskAsync(projectId, "Build", new DateOnly(2026, 1, 12), new DateOnly(2026, 1, 20));
+        var otherProjectId = await (await _client.PostAsJsonAsync("/api/projects", new
+        {
+            Name = "Line 4", Code = "L4", StartDate = new DateOnly(2026, 1, 1)
+        })).Content.ReadFromJsonAsync<Guid>();
+        var foreignTask = await CreateTaskAsync(otherProjectId, "Design", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+
+        var response = await _client.PostAsJsonAsync($"/api/projects/{projectId}/tasks/{build}/dependencies", new { PredecessorTaskId = foreignTask });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
 }

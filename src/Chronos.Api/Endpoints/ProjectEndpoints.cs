@@ -1,12 +1,17 @@
 using System.Security.Claims;
 using MediatR;
 using Chronos.Api.Security;
+using Chronos.Application.Projects.Commands.AddGanttTaskDependency;
 using Chronos.Application.Projects.Commands.AssignGanttTaskUser;
 using Chronos.Application.Projects.Commands.CreateGanttTask;
 using Chronos.Application.Projects.Commands.CreateProject;
+using Chronos.Application.Projects.Commands.RemoveGanttTaskDependency;
+using Chronos.Application.Projects.Commands.RescheduleGanttTask;
+using Chronos.Application.Projects.Commands.UpdateGanttTaskProgress;
 using Chronos.Application.Projects.Queries.GetProjectById;
 using Chronos.Application.Projects.Queries.GetProjectsByOrganization;
 using Chronos.Application.Projects.Queries.GetTasksByProject;
+using Chronos.Domain.Projects;
 
 namespace Chronos.Api.Endpoints;
 
@@ -65,9 +70,49 @@ public static class ProjectEndpoints
             var result = await sender.Send(new AssignGanttTaskUserCommand(user.GetOrganizationId(), projectId, taskId, body.UserId));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
         });
+
+        // Edit endpoints -- same scoping/policy as the assignee PATCH above.
+        group.MapPatch("/{projectId:guid}/tasks/{taskId:guid}/schedule", async (
+            Guid projectId, Guid taskId, RescheduleGanttTaskBody body, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new RescheduleGanttTaskCommand(
+                user.GetOrganizationId(), projectId, taskId, body.StartDate, body.EndDate));
+            return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
+        });
+
+        group.MapPatch("/{projectId:guid}/tasks/{taskId:guid}/progress", async (
+            Guid projectId, Guid taskId, UpdateGanttTaskProgressBody body, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new UpdateGanttTaskProgressCommand(
+                user.GetOrganizationId(), projectId, taskId, body.ProgressPercent));
+            return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
+        });
+
+        // A dependency is identified by its predecessor (at most one edge per predecessor per
+        // task -- see GanttTask.AddDependency), so it needs no id of its own in the URL.
+        group.MapPost("/{projectId:guid}/tasks/{taskId:guid}/dependencies", async (
+            Guid projectId, Guid taskId, AddGanttTaskDependencyBody body, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new AddGanttTaskDependencyCommand(
+                user.GetOrganizationId(), projectId, taskId, body.PredecessorTaskId, body.Type, body.LagDays));
+            return result.IsSuccess
+                ? Results.Created($"/api/projects/{projectId}/tasks/{taskId}/dependencies/{body.PredecessorTaskId}", body.PredecessorTaskId)
+                : Results.BadRequest(result.Error);
+        });
+
+        group.MapDelete("/{projectId:guid}/tasks/{taskId:guid}/dependencies/{predecessorTaskId:guid}", async (
+            Guid projectId, Guid taskId, Guid predecessorTaskId, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new RemoveGanttTaskDependencyCommand(
+                user.GetOrganizationId(), projectId, taskId, predecessorTaskId));
+            return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
+        });
     }
 
     public record CreateProjectBody(string Name, string Code, DateOnly StartDate);
     public record CreateGanttTaskBody(string Name, DateOnly StartDate, DateOnly EndDate, Guid? ParentTaskId);
     public record AssignGanttTaskUserBody(Guid? UserId);
+    public record RescheduleGanttTaskBody(DateOnly StartDate, DateOnly EndDate);
+    public record UpdateGanttTaskProgressBody(int ProgressPercent);
+    public record AddGanttTaskDependencyBody(Guid PredecessorTaskId, DependencyType Type = DependencyType.FinishToStart, int LagDays = 0);
 }

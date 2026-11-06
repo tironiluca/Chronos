@@ -60,11 +60,26 @@ public class GanttTask : Entity
         AssignedUserId = userId;
     }
 
-    public void AddDependency(Guid predecessorTaskId, DependencyType type, int lagDays = 0)
+    // Task-local invariants only (self-reference, duplicates). Invariants that need the whole
+    // task graph -- predecessor in the same project, no cycles -- live in
+    // Project.AddTaskDependency, which is what command handlers should call.
+    public TaskDependency AddDependency(Guid predecessorTaskId, DependencyType type, int lagDays = 0)
     {
         if (predecessorTaskId == Id)
             throw new InvalidOperationException("A task cannot depend on itself.");
+        if (_dependencies.Any(d => d.PredecessorTaskId == predecessorTaskId))
+            throw new InvalidOperationException($"Task already depends on '{predecessorTaskId}'.");
 
-        _dependencies.Add(new TaskDependency(predecessorTaskId, type, lagDays));
+        var dependency = new TaskDependency(predecessorTaskId, type, lagDays);
+        _dependencies.Add(dependency);
+        return dependency;
+    }
+
+    public void RemoveDependency(Guid predecessorTaskId)
+    {
+        var dependency = _dependencies.FirstOrDefault(d => d.PredecessorTaskId == predecessorTaskId)
+            ?? throw new InvalidOperationException($"Task does not depend on '{predecessorTaskId}'.");
+
+        _dependencies.Remove(dependency);
     }
 }
