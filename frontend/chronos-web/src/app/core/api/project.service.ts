@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, httpResource } from '@angular/common/http';
-import { CreateGanttTaskPayload, CreateProjectPayload, ProjectDto } from './project.model';
+import { AssignGanttTaskUserPayload, CreateGanttTaskPayload, CreateProjectPayload, ProjectDto } from './project.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
@@ -28,5 +28,9 @@ export class ProjectService {
 
   createTask(projectId: string, payload: CreateGanttTaskPayload) {
     return this.http.post<string>(`/api/projects/${projectId}/tasks`, payload);
+  }
+
+  assignTaskUser(projectId: string, taskId: string, payload: AssignGanttTaskUserPayload) {
+    return this.http.patch<void>(`/api/projects/${projectId}/tasks/${taskId}/assignee`, payload);
   }
 }

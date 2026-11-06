@@ -1,14 +1,12 @@
-import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { UserDto } from './user.model';
+import { Injectable } from '@angular/core';
+import { httpResource } from '@angular/common/http';
+import { UserDirectoryEntryDto } from './user.model';
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
-  private readonly http = inject(HttpClient);
-
-  // AdminOnly server-side (see UserEndpoints) -- callers without the Admin role get a 403,
-  // which is surfaced to the UI as a plain error, not special-cased here.
-  getByEmail(email: string) {
-    return this.http.get<UserDto>('/api/users', { params: { email } });
+  // Any org member -- the caller's own organization, id/display name/department only. Feeds
+  // assignee pickers (Kanban cards, Gantt tasks).
+  directoryResource() {
+    return httpResource<UserDirectoryEntryDto[]>(() => '/api/users/directory');
   }
 }

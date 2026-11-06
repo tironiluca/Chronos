@@ -34,4 +34,12 @@ describe('ProjectPickerComponent', () => {
 
     expect(emitted).toEqual(['p1', null]);
   });
+
+  it('preselects the given project id', () => {
+    const fixture = setup();
+    fixture.componentRef.setInput('selectedId', 'p1');
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('select') as HTMLSelectElement).value).toBe('p1');
+  });
 });

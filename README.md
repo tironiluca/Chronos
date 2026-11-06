@@ -166,8 +166,8 @@ just constructed) needs its entry explicitly marked `Added`, or EF's change trac
 new owned entity for an existing one and the save fails.
 
 Frontend: `/projects` (list + create, links to each Gantt page), `/projects/:projectId/gantt`
-(`ProjectGanttPageComponent`: loads the project, adds tasks, renders `GanttChartComponent`, lists
-linked Kanban boards), and `/project-load` (project × ISO-week grid, one quarter at a time, cell =
+(`ProjectGanttPageComponent`: loads the project, adds tasks, assigns them via the same assignee
+picker, renders `GanttChartComponent`, lists linked Kanban boards), and `/project-load` (project × ISO-week grid, one quarter at a time, cell =
 number of tasks overlapping that week, optional project-subset filter; bucketing is client-side
 from `GET /api/projects`).
 
@@ -189,7 +189,9 @@ authentication, same as Project/GanttTask. `BoardRepository.TrackNewColumn`/`Tra
 the same explicit-`Added`-marking fix as `ProjectRepository.TrackNewTask`, needed at both owned
 levels here.
 
-Frontend: `/boards` (`KanbanBoardsPageComponent` + `KanbanBoardComponent`). A board can be linked
+Frontend: `/boards` (`KanbanBoardsPageComponent` + `KanbanBoardComponent`). Cards are assigned via
+an assignee picker over `GET /api/users/directory` (any org member; id/display name/department only —
+email/role lookup via `GET /api/users?email=` stays `AdminOnly`). A board can be linked
 to a project when created; a linked board links to that project's Gantt page, and new cards on it
 can be linked to one of the project's tasks (shown on the card). `/boards?boardId=<id>` preselects
 a board — the Gantt page's "Linked Kanban boards" list uses it.

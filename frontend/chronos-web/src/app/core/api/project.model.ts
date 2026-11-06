@@ -28,6 +28,10 @@ export interface CreateProjectPayload {
   startDate: string; // ISO date
 }
 
+export interface AssignGanttTaskUserPayload {
+  userId: string | null;
+}
+
 export interface CreateGanttTaskPayload {
   name: string;
   startDate: string; // ISO date

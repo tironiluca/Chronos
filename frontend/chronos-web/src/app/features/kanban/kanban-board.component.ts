@@ -2,12 +2,12 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { BoardService } from '../../core/api/board.service';
 import { UserService } from '../../core/api/user.service';
+import { UserPickerComponent } from '../users/user-picker.component';
 import { ProjectService } from '../../core/api/project.service';
 import { BoardDetailDto } from '../../core/api/board.model';
 
-// Renders one board's columns/cards and lets a card be assigned by email (resolved via
-// GET /api/users?email=, AdminOnly server-side -- see UserService) since there's no
-// organization-wide user list endpoint to build a picker from yet.
+// Renders one board's columns/cards; cards are assigned via a picker over the org's user
+// directory (GET /api/users/directory, any org member), fetched once per board.
 //
 // Gantt cross-link: a board with a ProjectId links to that project's Gantt page, and new cards
 // on it can be linked to one of the project's tasks (KanbanCard.GanttTaskId). Standalone boards
@@ -16,7 +16,7 @@ import { BoardDetailDto } from '../../core/api/board.model';
 @Component({
   selector: 'chronos-kanban-board',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, UserPickerComponent],
   template: `
     @if (resource.isLoading()) {
       <p class="empty-state">Loading board...</p>
@@ -53,29 +53,12 @@ import { BoardDetailDto } from '../../core/api/board.model';
                     @if (card.ganttTaskId && taskNames().get(card.ganttTaskId); as taskName) {
                       <a class="kanban-card-task" [routerLink]="['/projects', board.projectId, 'gantt']">↳ {{ taskName }}</a>
                     }
-                    @if (card.assignedUserId) {
-                      <span class="badge badge-assigned">Assigned</span>
-                    }
                     <div class="kanban-card-actions">
-                      @if (assigningCardId() === card.id) {
-                        <input
-                          type="email"
-                          placeholder="assignee@org.com"
-                          [value]="assigneeEmail()"
-                          (input)="assigneeEmail.set($any($event.target).value)" />
-                        <button type="button" class="btn-sm" (click)="confirmAssign(board.id, column.id, card.id)">
-                          Confirm
-                        </button>
-                      } @else {
-                        <button type="button" class="btn-sm btn-ghost" (click)="assigningCardId.set(card.id)">
-                          Assign
-                        </button>
-                        @if (card.assignedUserId) {
-                          <button type="button" class="btn-sm btn-danger" (click)="unassign(board.id, column.id, card.id)">
-                            Unassign
-                          </button>
-                        }
-                      }
+                      <chronos-user-picker
+                        [users]="directory.value() ?? []"
+                        [selectedId]="card.assignedUserId"
+                        [ariaLabel]="'Assignee for ' + card.title"
+                        (selectionChange)="assign(board.id, column.id, card.id, $event)" />
                     </div>
                   </li>
                 } @empty {
@@ -186,6 +169,7 @@ export class KanbanBoardComponent {
   private readonly projectService = inject(ProjectService);
 
   protected readonly resource = this.boardService.boardDetailResource(() => this.boardId());
+  protected readonly directory = this.userService.directoryResource();
 
   // Only fetched for project-linked boards (a null id skips the request).
   private readonly projectResource = this.projectService.projectResource(() => this.resource.value()?.projectId ?? null);
@@ -199,8 +183,6 @@ export class KanbanBoardComponent {
   protected readonly newColumnName = signal('');
   protected readonly newCardTitles = signal<Record<string, string>>({});
   protected readonly newCardTaskIds = signal<Record<string, string>>({});
-  protected readonly assigningCardId = signal<string | null>(null);
-  protected readonly assigneeEmail = signal('');
   protected readonly actionError = signal<string | null>(null);
 
   onCreateColumn(event: Event, board: BoardDetailDto): void {
@@ -242,30 +224,12 @@ export class KanbanBoardComponent {
     });
   }
 
-  confirmAssign(boardId: string, columnId: string, cardId: string): void {
-    const email = this.assigneeEmail();
-    if (!email) return;
+  // userId null unassigns.
+  assign(boardId: string, columnId: string, cardId: string, userId: string | null): void {
     this.actionError.set(null);
-
-    this.userService.getByEmail(email).subscribe({
-      next: (user) => {
-        this.boardService.assignCardUser(boardId, columnId, cardId, { userId: user.id }).subscribe({
-          next: () => {
-            this.assigningCardId.set(null);
-            this.assigneeEmail.set('');
-            this.resource.reload();
-          },
-          error: (err) => this.actionError.set(err?.error ?? 'Could not assign card.')
-        });
-      },
-      error: (err) => this.actionError.set(err?.error ?? 'No user found with that email.')
-    });
-  }
-
-  unassign(boardId: string, columnId: string, cardId: string): void {
-    this.boardService.assignCardUser(boardId, columnId, cardId, { userId: null }).subscribe({
+    this.boardService.assignCardUser(boardId, columnId, cardId, { userId }).subscribe({
       next: () => this.resource.reload(),
-      error: (err) => this.actionError.set(err?.error ?? 'Could not unassign card.')
+      error: (err) => this.actionError.set(err?.error ?? 'Could not assign card.')
     });
   }
 }

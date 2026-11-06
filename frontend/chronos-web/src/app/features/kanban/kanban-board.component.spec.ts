@@ -6,9 +6,9 @@ import { KanbanBoardComponent } from './kanban-board.component';
 import { BoardService } from '../../core/api/board.service';
 import { UserService } from '../../core/api/user.service';
 import { BoardDetailDto } from '../../core/api/board.model';
-import { UserDto } from '../../core/api/user.model';
 import { ProjectService } from '../../core/api/project.service';
 import { createFakeProjectService, makeProject, makeTask } from '../../testing/fake-project-service';
+import { createFakeUserService } from '../../testing/fake-user-service';
 
 const board: BoardDetailDto = {
   id: 'board-1',
@@ -36,12 +36,10 @@ function createFakeBoardService(boardValue: BoardDetailDto = board) {
   };
 }
 
-const foundUser: UserDto = { id: 'user-1', email: 'a@org.com', displayName: 'A', role: 'Employee', departmentId: null };
-
 describe('KanbanBoardComponent', () => {
   function setup(
     fakeBoardService: ReturnType<typeof createFakeBoardService>,
-    fakeUserService: Partial<UserService> = {},
+    fakeUserService: Partial<Record<keyof UserService, unknown>> = createFakeUserService(),
     fakeProjectService = createFakeProjectService()
   ) {
     TestBed.configureTestingModule({
@@ -71,37 +69,40 @@ describe('KanbanBoardComponent', () => {
     expect(fakeBoardService.reloadSpy).toHaveBeenCalled();
   });
 
-  it('resolves the assignee email to a user id before assigning', () => {
-    const fakeBoardService = createFakeBoardService();
-    const fakeUserService = { getByEmail: jest.fn().mockReturnValue(of(foundUser)) };
-    const fixture = setup(fakeBoardService, fakeUserService);
-    fixture.componentInstance['assigneeEmail'].set('a@org.com');
+  it('offers every directory user in each card\'s assignee picker', () => {
+    const fixture = setup(createFakeBoardService());
 
-    fixture.componentInstance.confirmAssign('board-1', 'col-1', 'card-1');
-
-    expect(fakeUserService.getByEmail).toHaveBeenCalledWith('a@org.com');
-    expect(fakeBoardService.assignCardUser).toHaveBeenCalledWith('board-1', 'col-1', 'card-1', { userId: 'user-1' });
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select[aria-label="Assignee for Task A"]');
+    expect(Array.from(select.options).map((o) => o.textContent?.trim())).toEqual(['Unassigned', 'Anna', 'Bruno']);
   });
 
-  it('surfaces an error when the email does not resolve to a user', () => {
+  it('assigns the picked user and reloads', () => {
     const fakeBoardService = createFakeBoardService();
-    const fakeUserService = { getByEmail: jest.fn().mockReturnValue(throwError(() => ({ error: 'not found' }))) };
-    const fixture = setup(fakeBoardService, fakeUserService);
-    fixture.componentInstance['assigneeEmail'].set('missing@org.com');
+    const fixture = setup(fakeBoardService);
 
-    fixture.componentInstance.confirmAssign('board-1', 'col-1', 'card-1');
+    fixture.componentInstance.assign('board-1', 'col-1', 'card-1', 'user-2');
 
-    expect(fixture.componentInstance['actionError']()).toBe('not found');
-    expect(fakeBoardService.assignCardUser).not.toHaveBeenCalled();
+    expect(fakeBoardService.assignCardUser).toHaveBeenCalledWith('board-1', 'col-1', 'card-1', { userId: 'user-2' });
+    expect(fakeBoardService.reloadSpy).toHaveBeenCalled();
   });
 
   it('unassigns a card by sending a null userId', () => {
     const fakeBoardService = createFakeBoardService();
     const fixture = setup(fakeBoardService);
 
-    fixture.componentInstance.unassign('board-1', 'col-1', 'card-1');
+    fixture.componentInstance.assign('board-1', 'col-1', 'card-1', null);
 
     expect(fakeBoardService.assignCardUser).toHaveBeenCalledWith('board-1', 'col-1', 'card-1', { userId: null });
+  });
+
+  it('surfaces the server error when assignment fails', () => {
+    const fakeBoardService = createFakeBoardService();
+    fakeBoardService.assignCardUser.mockReturnValue(throwError(() => ({ error: "User 'x' was not found." })));
+    const fixture = setup(fakeBoardService);
+
+    fixture.componentInstance.assign('board-1', 'col-1', 'card-1', 'user-1');
+
+    expect(fixture.componentInstance['actionError']()).toBe("User 'x' was not found.");
   });
 
   describe('when the board is linked to a project', () => {
@@ -119,7 +120,7 @@ describe('KanbanBoardComponent', () => {
     };
 
     it('links to the project Gantt page and shows the linked task name on the card', () => {
-      const fixture = setup(createFakeBoardService(linkedBoard), {}, createFakeProjectService([project]));
+      const fixture = setup(createFakeBoardService(linkedBoard), createFakeUserService(), createFakeProjectService([project]));
       const element: HTMLElement = fixture.nativeElement;
 
       const links = Array.from(element.querySelectorAll('a')).map((a) => a.textContent?.trim());
@@ -129,7 +130,7 @@ describe('KanbanBoardComponent', () => {
 
     it('creates a card linked to the selected Gantt task', () => {
       const fakeBoardService = createFakeBoardService(linkedBoard);
-      const fixture = setup(fakeBoardService, {}, createFakeProjectService([project]));
+      const fixture = setup(fakeBoardService, createFakeUserService(), createFakeProjectService([project]));
       fixture.componentInstance.setNewCardTitle('col-1', 'Wire cabinet');
       fixture.componentInstance.setNewCardTask('col-1', 'task-1');
 
@@ -142,7 +143,7 @@ describe('KanbanBoardComponent', () => {
 
   it('does not fetch a project or offer task linking for a standalone board', () => {
     const fakeProjectService = createFakeProjectService();
-    const fixture = setup(createFakeBoardService(), {}, fakeProjectService);
+    const fixture = setup(createFakeBoardService(), createFakeUserService(), fakeProjectService);
 
     expect(fakeProjectService.requestedIds[0]()).toBeNull();
     expect(fixture.nativeElement.querySelector('select[aria-label="Linked Gantt task"]')).toBeNull();

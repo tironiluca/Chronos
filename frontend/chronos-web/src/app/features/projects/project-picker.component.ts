@@ -8,12 +8,14 @@ import { ProjectService } from '../../core/api/project.service';
   selector: 'chronos-project-picker',
   standalone: true,
   template: `
-    <select [value]="selectedId() ?? ''" (change)="onChange($any($event.target).value)">
+    <!-- [selected] per option, not [value] on <select>: the select's value binding is applied
+         before @for renders its options, so a preselected id would silently not stick. -->
+    <select (change)="onChange($any($event.target).value)">
       @if (includeAllOption()) {
-        <option value="">{{ allOptionLabel() }}</option>
+        <option value="" [selected]="!selectedId()">{{ allOptionLabel() }}</option>
       }
       @for (project of resource.value() ?? []; track project.id) {
-        <option [value]="project.id">{{ project.code }} — {{ project.name }}</option>
+        <option [value]="project.id" [selected]="project.id === selectedId()">{{ project.code }} — {{ project.name }}</option>
       }
     </select>
     @if (resource.isLoading()) {

@@ -125,6 +125,13 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   shared `GanttTaskDto.From(GanttTask)` mapper (the only other construction site,
   `GetTasksByProjectQueryHandler`, now uses it). Not-found and cross-org return the same 400 +
   message, as everywhere else. No new repository method, no migration.
+- **User directory + assignee pickers**: `GET /api/users/directory` (any org member;
+  `UserDirectoryEntryDto` = `Id`/`DisplayName`/`DepartmentId` only — no email/role, so the
+  `AdminOnly` email lookup stays the only way to see those). Frontend `UserPickerComponent` is
+  presentational (parent fetches the directory once, so N cards/tasks = 1 request). Kanban cards
+  assign through it (the email-lookup flow and the now-unused `UserService.getByEmail` client
+  method are gone); the Gantt page gained a task list with an assignee picker per task
+  (`PATCH .../tasks/{taskId}/assignee`). Verified live as a plain Employee.
 - **Resource-availability epic frontend** (Angular, all behind `authGuard`):
   - `/departments`: `DepartmentPickerComponent` (flattened tree) + Admin create form.
   - `/boards`: board list/create (optional linked project via `ProjectPickerComponent`) + board
@@ -145,8 +152,8 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   - `withComponentInputBinding()` is on — route params/query params bind to routed components'
     inputs (`projectId`, `boardId`).
   - Spec fakes for `ProjectService` live in `src/app/testing/` (excluded from `tsconfig.app.json`).
-- Last verified (2026-11-06, this pass, locally): backend 180/180 non-container tests (Domain 37,
-  Application 73, Infrastructure 16, Api 54), frontend 67/67 Jest, `ng build` clean, plus a
+- Last verified (2026-11-06, this pass, locally): backend 184/184 non-container tests (Domain 37,
+  Application 75, Infrastructure 16, Api 56), frontend 73/73 Jest, `ng build` clean, plus a
   Playwright smoke run against the real API (Sqlite) + `ng serve`: projects → board linked to a
   project → card linked to a task → Gantt page renders and adds a task → back to the board via
   `?boardId=` → project-load grid + chip filter → availability project filter; zero console errors.
@@ -183,6 +190,8 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   this pass the Gantt page had never rendered — no UI linked to it, the route pointed at
   `GanttChartComponent` directly (required `tasks` input never set), and `GET /api/projects/{id}`
   didn't exist.
+- `<select [value]="...">` doesn't preselect when the options come from `@for`: the value binding
+  is applied before the options exist. Use `[selected]` per `<option>` (all three pickers now do).
 - httpResource fakes in specs must be **lazy** (`computed`, not `signal(id())`): reading a
   required input inside the id source at construction throws NG0950, which the real httpResource
   never does.
@@ -203,9 +212,6 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 - No command adds a `TaskDependency` yet, so the Gantt chart never draws dependency arrows in
   practice (the DTO/renderer path is wired). The "`TrackNewTask`-class bug, one level deeper"
   concern for `TaskDependency` stays unverified until that command exists.
-- Assigning users (Kanban cards, Gantt tasks) still goes by email lookup, which is `AdminOnly` —
-  non-Admins get an error. No org-wide user list endpoint to build a picker from. Gantt task
-  assignment has no UI at all yet (API only).
 - `jest.config.ts` still has a `frappe-gantt` entry in `transformIgnorePatterns`; dead since the
   global-script change, harmless.
 
@@ -235,9 +241,7 @@ Design decisions kept here because they still constrain future changes:
 
 1. ~~Confirm provider coverage for this pass~~ — **done 2026-11-06** locally (container suites,
    see Done). Real CI runs once the branch goes to `main` via PR.
-2. Org-wide user list endpoint (e.g. `GET /api/users`, any org member, minimal `Id`/`DisplayName`)
-   → replace email-based assignment with a picker for Kanban cards, and add Gantt task assignment
-   UI. Removes the AdminOnly dead-end for non-Admins.
+2. ~~Org-wide user directory + assignee pickers~~ — **done 2026-11-06** (see Done).
 3. Edit commands + UI: reschedule task / update progress / add dependency (verify the
    `TaskDependency` owned-collection add path then), move card between columns.
 4. Cross-org Admin visibility for leave requests — worth solving once rather than building two
