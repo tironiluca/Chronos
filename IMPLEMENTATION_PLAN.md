@@ -1,7 +1,8 @@
 # Chronos — Implementation Plan
 
 Status as of 2026-11-06: resource-availability epic **complete** (backend + frontend) on branch
-`ccr-85238cc1-tu6me9`. CI not yet re-confirmed for this pass's commits — see Suggested next steps. Working reference for picking
+`ccr-85238cc1-tu6me9`. CI (`ci.yml`) only triggers on push/PR to `main`, so feature-branch pushes
+don't run it; provider coverage for this branch was confirmed locally instead (see Done). Working reference for picking
 the project back up — not a spec. Compressed to gotchas/decisions worth keeping; full narrative is
 in git history (`git log --oneline`) if ever needed.
 
@@ -149,6 +150,9 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   Playwright smoke run against the real API (Sqlite) + `ng serve`: projects → board linked to a
   project → card linked to a task → Gantt page renders and adds a task → back to the board via
   `?boardId=` → project-load grid + chip filter → availability project filter; zero console errors.
+  Container suites run locally too (`dockerd` is installed in the cloud sandbox, just not started —
+  `nohup dockerd &` first): `SqlServerRepositoryTests` 3/3, `PostgreSqlRepositoryTests` 3/3, same
+  filters as CI's provider jobs. Docker Hub may 429 the `postgres:15.1` pull — retry `docker pull`.
 - Previously verified (2026-09-28): backend 167/167 non-container tests (Domain 37, Application 67,
   Infrastructure 16, Api 50 — the +3/+3 over the availability-query counts is the `GET
   /api/users?email=` lookup endpoint above), frontend 18/18 locally, **plus CI green on all four
@@ -229,8 +233,8 @@ Design decisions kept here because they still constrain future changes:
 
 ## Suggested next steps, in order
 
-1. Confirm CI green on all four jobs for this pass's commits (the new project queries run against
-   real SqlServer/PostgreSql only in CI).
+1. ~~Confirm provider coverage for this pass~~ — **done 2026-11-06** locally (container suites,
+   see Done). Real CI runs once the branch goes to `main` via PR.
 2. Org-wide user list endpoint (e.g. `GET /api/users`, any org member, minimal `Id`/`DisplayName`)
    → replace email-based assignment with a picker for Kanban cards, and add Gantt task assignment
    UI. Removes the AdminOnly dead-end for non-Admins.
