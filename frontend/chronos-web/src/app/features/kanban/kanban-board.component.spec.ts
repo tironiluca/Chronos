@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { KanbanBoardComponent } from './kanban-board.component';
@@ -6,6 +7,8 @@ import { BoardService } from '../../core/api/board.service';
 import { UserService } from '../../core/api/user.service';
 import { BoardDetailDto } from '../../core/api/board.model';
 import { UserDto } from '../../core/api/user.model';
+import { ProjectService } from '../../core/api/project.service';
+import { createFakeProjectService, makeProject, makeTask } from '../../testing/fake-project-service';
 
 const board: BoardDetailDto = {
   id: 'board-1',
@@ -17,11 +20,11 @@ const board: BoardDetailDto = {
   ]
 };
 
-function createFakeBoardService() {
+function createFakeBoardService(boardValue: BoardDetailDto = board) {
   const reload = jest.fn();
   return {
     boardDetailResource: () => ({
-      value: signal<BoardDetailDto | undefined>(board),
+      value: signal<BoardDetailDto | undefined>(boardValue),
       isLoading: signal(false),
       error: signal(undefined),
       reload
@@ -36,12 +39,18 @@ function createFakeBoardService() {
 const foundUser: UserDto = { id: 'user-1', email: 'a@org.com', displayName: 'A', role: 'Employee', departmentId: null };
 
 describe('KanbanBoardComponent', () => {
-  function setup(fakeBoardService: ReturnType<typeof createFakeBoardService>, fakeUserService: Partial<UserService> = {}) {
+  function setup(
+    fakeBoardService: ReturnType<typeof createFakeBoardService>,
+    fakeUserService: Partial<UserService> = {},
+    fakeProjectService = createFakeProjectService()
+  ) {
     TestBed.configureTestingModule({
       imports: [KanbanBoardComponent],
       providers: [
         { provide: BoardService, useValue: fakeBoardService },
-        { provide: UserService, useValue: fakeUserService }
+        { provide: UserService, useValue: fakeUserService },
+        { provide: ProjectService, useValue: fakeProjectService },
+        provideRouter([])
       ]
     });
 
@@ -93,5 +102,59 @@ describe('KanbanBoardComponent', () => {
     fixture.componentInstance.unassign('board-1', 'col-1', 'card-1');
 
     expect(fakeBoardService.assignCardUser).toHaveBeenCalledWith('board-1', 'col-1', 'card-1', { userId: null });
+  });
+
+  describe('when the board is linked to a project', () => {
+    const linkedTask = makeTask({ id: 'task-1', name: 'Install PLC', startDate: '2026-01-05', endDate: '2026-01-10' });
+    const project = makeProject({ id: 'project-1', code: 'L3U', tasks: [linkedTask] });
+    const linkedBoard: BoardDetailDto = {
+      ...board,
+      projectId: 'project-1',
+      columns: [
+        {
+          ...board.columns[0],
+          cards: [{ id: 'card-1', columnId: 'col-1', title: 'Task A', assignedUserId: null, ganttTaskId: 'task-1' }]
+        }
+      ]
+    };
+
+    it('links to the project Gantt page and shows the linked task name on the card', () => {
+      const fixture = setup(createFakeBoardService(linkedBoard), {}, createFakeProjectService([project]));
+      const element: HTMLElement = fixture.nativeElement;
+
+      const links = Array.from(element.querySelectorAll('a')).map((a) => a.textContent?.trim());
+      expect(links).toContain('Gantt: L3U ›');
+      expect(links).toContain('↳ Install PLC');
+    });
+
+    it('creates a card linked to the selected Gantt task', () => {
+      const fakeBoardService = createFakeBoardService(linkedBoard);
+      const fixture = setup(fakeBoardService, {}, createFakeProjectService([project]));
+      fixture.componentInstance.setNewCardTitle('col-1', 'Wire cabinet');
+      fixture.componentInstance.setNewCardTask('col-1', 'task-1');
+
+      fixture.componentInstance.onCreateCard(new Event('submit'), 'board-1', 'col-1');
+
+      expect(fakeBoardService.createCard).toHaveBeenCalledWith('board-1', 'col-1', { title: 'Wire cabinet', ganttTaskId: 'task-1' });
+      expect(fixture.componentInstance['newCardTaskIds']()['col-1']).toBe('');
+    });
+  });
+
+  it('does not fetch a project or offer task linking for a standalone board', () => {
+    const fakeProjectService = createFakeProjectService();
+    const fixture = setup(createFakeBoardService(), {}, fakeProjectService);
+
+    expect(fakeProjectService.requestedIds[0]()).toBeNull();
+    expect(fixture.nativeElement.querySelector('select[aria-label="Linked Gantt task"]')).toBeNull();
+  });
+
+  it('creates an unlinked card when no task is selected', () => {
+    const fakeBoardService = createFakeBoardService();
+    const fixture = setup(fakeBoardService);
+    fixture.componentInstance.setNewCardTitle('col-1', 'Loose card');
+
+    fixture.componentInstance.onCreateCard(new Event('submit'), 'board-1', 'col-1');
+
+    expect(fakeBoardService.createCard).toHaveBeenCalledWith('board-1', 'col-1', { title: 'Loose card', ganttTaskId: null });
   });
 });

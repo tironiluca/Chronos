@@ -295,6 +295,32 @@ thead th {
 
 /* Layout & feedback utilities ------------------------------------------ */
 
+/* Toggle chips (Kanban board switcher, project-load project filter) */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chip {
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+}
+
+.chip-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary-contrast);
+
+  &:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+  }
+}
+
 .page {
   max-width: 1100px;
   margin: 0 auto;
@@ -319,7 +345,10 @@ thead th {
 }
 
 .toolbar {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: var(--space-3);
 }
 
 .card {

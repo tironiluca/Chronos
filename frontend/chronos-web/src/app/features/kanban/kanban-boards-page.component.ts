@@ -1,14 +1,16 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, input, linkedSignal, signal } from '@angular/core';
 import { BoardService } from '../../core/api/board.service';
 import { KanbanBoardComponent } from './kanban-board.component';
+import { ProjectPickerComponent } from '../projects/project-picker.component';
 
 // Routed at /boards (see app.routes.ts), behind authGuard. Boards may stand alone
-// (Board.ProjectId optional, per the resource-availability epic's settled design) so there's no
-// project picker here -- just a name.
+// (Board.ProjectId optional, per the resource-availability epic's settled design), so the
+// project picker defaults to "no linked project". ?boardId= preselects a board -- that's how the
+// Gantt page's "Linked Kanban boards" list deep-links here.
 @Component({
   selector: 'chronos-kanban-boards-page',
   standalone: true,
-  imports: [KanbanBoardComponent],
+  imports: [KanbanBoardComponent, ProjectPickerComponent],
   template: `
     <div class="page">
       <header class="page-header">
@@ -21,6 +23,10 @@ import { KanbanBoardComponent } from './kanban-board.component';
           placeholder="New board name"
           [value]="newBoardName()"
           (input)="newBoardName.set($any($event.target).value)" />
+        <chronos-project-picker
+          [selectedId]="newBoardProjectId()"
+          allOptionLabel="No linked project"
+          (selectionChange)="newBoardProjectId.set($event)" />
         <button type="submit" [disabled]="submitting()">Create board</button>
         @if (error()) {
           <p class="error">{{ error() }}</p>
@@ -30,7 +36,7 @@ import { KanbanBoardComponent } from './kanban-board.component';
       @if (resource.isLoading()) {
         <p class="empty-state">Loading boards...</p>
       }
-      <ul class="board-chips">
+      <ul class="chips">
         @for (board of resource.value(); track board.id) {
           <li>
             <button
@@ -51,36 +57,17 @@ import { KanbanBoardComponent } from './kanban-board.component';
       }
     </div>
   `,
-  styles: `
-    .board-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-    }
-
-    .chip {
-      border-radius: 999px;
-      padding: 0.45rem 1rem;
-    }
-
-    .chip-active {
-      background: var(--color-primary);
-      border-color: var(--color-primary);
-      color: var(--color-primary-contrast);
-
-      &:hover:not(:disabled) {
-        background: var(--color-primary-hover);
-        border-color: var(--color-primary-hover);
-      }
-    }
-  `
 })
 export class KanbanBoardsPageComponent {
   private readonly boardService = inject(BoardService);
 
   protected readonly resource = this.boardService.boardsResource();
-  protected readonly selectedBoardId = signal<string | null>(null);
+  // Bound from the ?boardId= query param via withComponentInputBinding.
+  boardId = input<string | undefined>();
+
+  protected readonly selectedBoardId = linkedSignal<string | null>(() => this.boardId() ?? null);
   protected readonly newBoardName = signal('');
+  protected readonly newBoardProjectId = signal<string | null>(null);
   protected readonly submitting = signal(false);
   protected readonly error = signal<string | null>(null);
 
@@ -92,10 +79,11 @@ export class KanbanBoardsPageComponent {
     this.error.set(null);
     this.submitting.set(true);
 
-    this.boardService.create({ name, projectId: null }).subscribe({
+    this.boardService.create({ name, projectId: this.newBoardProjectId() }).subscribe({
       next: (id) => {
         this.submitting.set(false);
         this.newBoardName.set('');
+        this.newBoardProjectId.set(null);
         this.resource.reload();
         this.selectedBoardId.set(id);
       },

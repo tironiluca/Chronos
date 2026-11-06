@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DepartmentPickerComponent } from '../departments/department-picker.component';
+import { ProjectPickerComponent } from '../projects/project-picker.component';
 import { LeaveGridComponent } from './leave-grid.component';
 import { ResourceAvailabilityService } from '../../core/api/resource-availability.service';
 
@@ -18,11 +19,15 @@ function lastOfMonth(monthStart: Date): Date {
 
 // Routed at /availability (see app.routes.ts), behind authGuard. Cross-department: any
 // authenticated org member may query availability (see ResourceAvailabilityEndpoints), scoped
-// further by the department filter below -- inclusive of descendants, resolved server-side.
+// further by the department filter below -- inclusive of descendants, resolved server-side --
+// and the project filter. Server-side the project filter scopes only AssignedTasks/AssignedCards,
+// never ApprovedLeave (leave isn't project-related), so on its own it wouldn't change this grid --
+// instead, with a project selected, rows narrow to people with work assigned in that project
+// ("who on project X is away this month").
 @Component({
   selector: 'chronos-availability-calendar-page',
   standalone: true,
-  imports: [DepartmentPickerComponent, LeaveGridComponent],
+  imports: [DepartmentPickerComponent, ProjectPickerComponent, LeaveGridComponent],
   template: `
     <div class="page">
       <header class="page-header">
@@ -36,6 +41,10 @@ function lastOfMonth(monthStart: Date): Date {
           [selectedId]="departmentId()"
           allOptionLabel="All departments"
           (selectionChange)="departmentId.set($event)" />
+        <chronos-project-picker
+          [selectedId]="projectId()"
+          allOptionLabel="All projects"
+          (selectionChange)="projectId.set($event)" />
       </div>
 
       @if (resource.isLoading()) {
@@ -46,7 +55,7 @@ function lastOfMonth(monthStart: Date): Date {
       }
 
       <div class="card table-scroll">
-        <chronos-leave-grid [availability]="resource.value() ?? []" [monthStart]="monthStartIso()" />
+        <chronos-leave-grid [availability]="rows()" [monthStart]="monthStartIso()" />
       </div>
     </div>
   `,
@@ -60,6 +69,7 @@ function lastOfMonth(monthStart: Date): Date {
 })
 export class AvailabilityCalendarPageComponent {
   protected readonly departmentId = signal<string | null>(null);
+  protected readonly projectId = signal<string | null>(null);
   private readonly monthOffset = signal(0);
 
   private readonly monthStart = computed(() => firstOfMonth(this.monthOffset()));
@@ -72,10 +82,17 @@ export class AvailabilityCalendarPageComponent {
   private readonly availabilityService = inject(ResourceAvailabilityService);
   protected readonly resource = this.availabilityService.availabilityResource(() => ({
     departmentId: this.departmentId(),
-    projectId: null,
+    projectId: this.projectId(),
     from: this.monthStartIso(),
     to: this.monthEndIso()
   }));
+
+  protected readonly rows = computed(() => {
+    const entries = this.resource.value() ?? [];
+    return this.projectId()
+      ? entries.filter((entry) => entry.assignedTasks.length > 0 || entry.assignedCards.length > 0)
+      : entries;
+  });
 
   shiftMonth(delta: number): void {
     this.monthOffset.update((value) => value + delta);

@@ -1,9 +1,12 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { KanbanBoardsPageComponent } from './kanban-boards-page.component';
 import { BoardService } from '../../core/api/board.service';
 import { BoardDto } from '../../core/api/board.model';
+import { ProjectService } from '../../core/api/project.service';
+import { createFakeProjectService } from '../../testing/fake-project-service';
 
 function createFakeBoardService(boards: BoardDto[]) {
   const reload = jest.fn();
@@ -23,13 +26,18 @@ function createFakeBoardService(boards: BoardDto[]) {
 }
 
 describe('KanbanBoardsPageComponent', () => {
-  function setup(fakeService: ReturnType<typeof createFakeBoardService>) {
+  function setup(fakeService: ReturnType<typeof createFakeBoardService>, boardIdQueryParam?: string) {
     TestBed.configureTestingModule({
       imports: [KanbanBoardsPageComponent],
-      providers: [{ provide: BoardService, useValue: fakeService }]
+      providers: [
+        { provide: BoardService, useValue: fakeService },
+        { provide: ProjectService, useValue: createFakeProjectService() },
+        provideRouter([])
+      ]
     });
 
     const fixture = TestBed.createComponent(KanbanBoardsPageComponent);
+    if (boardIdQueryParam) fixture.componentRef.setInput('boardId', boardIdQueryParam);
     fixture.detectChanges();
     return fixture;
   }
@@ -65,5 +73,24 @@ describe('KanbanBoardsPageComponent', () => {
     fixture.componentInstance.onCreateBoard(new Event('submit'));
 
     expect(fixture.componentInstance['error']()).toBe('Board limit reached');
+  });
+
+  it('creates a board linked to the picked project', () => {
+    const fakeService = createFakeBoardService([]);
+    fakeService.create.mockReturnValue(of('board-10'));
+    const fixture = setup(fakeService);
+    fixture.componentInstance['newBoardName'].set('Line 3 board');
+    fixture.componentInstance['newBoardProjectId'].set('project-1');
+
+    fixture.componentInstance.onCreateBoard(new Event('submit'));
+
+    expect(fakeService.create).toHaveBeenCalledWith({ name: 'Line 3 board', projectId: 'project-1' });
+    expect(fixture.componentInstance['newBoardProjectId']()).toBeNull();
+  });
+
+  it('preselects the board named by the ?boardId= query param', () => {
+    const fixture = setup(createFakeBoardService([]), 'board-from-gantt');
+
+    expect(fixture.componentInstance['selectedBoardId']()).toBe('board-from-gantt');
   });
 });
