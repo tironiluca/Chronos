@@ -8,9 +8,7 @@ import { FrappeGanttRenderer } from './frappe-gantt-renderer';
   standalone: true,
   providers: [{ provide: GANTT_RENDERER, useClass: FrappeGanttRenderer }],
   template: `
-    <div class="page">
-      <div #container class="gantt-container card table-scroll"></div>
-    </div>
+    <div #container class="gantt-container card table-scroll"></div>
   `,
   styles: [`.gantt-container { width: 100%; }`]
 })

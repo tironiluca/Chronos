@@ -12,6 +12,8 @@ import { AuthService } from './core/auth/auth.service';
         <span class="brand">Chronos</span>
         <a routerLink="/leave" routerLinkActive="active">Leave</a>
         <a routerLink="/availability" routerLinkActive="active">Availability</a>
+        <a routerLink="/projects" routerLinkActive="active">Projects</a>
+        <a routerLink="/project-load" routerLinkActive="active">Project load</a>
         <a routerLink="/departments" routerLinkActive="active">Departments</a>
         <a routerLink="/boards" routerLinkActive="active">Boards</a>
         <span class="spacer"></span>

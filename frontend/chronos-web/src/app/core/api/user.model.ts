@@ -1,7 +1,7 @@
-export interface UserDto {
+// GET /api/users/directory -- readable by any org member, so no email/role (see
+// UserDirectoryEntryDto server-side).
+export interface UserDirectoryEntryDto {
   id: string;
-  email: string;
   displayName: string;
-  role: string;
   departmentId: string | null;
 }

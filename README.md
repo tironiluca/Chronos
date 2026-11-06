@@ -85,6 +85,12 @@ Angular-native alternatives (`ngx-gantt`) and commercial libraries (Bryntum, Syn
   DIP applied at the third-party-dependency boundary, and it makes the component trivially unit-testable
   with a fake renderer (no real SVG engine needed in Jest).
 
+Loading note: frappe-gantt 0.6's `dist/frappe-gantt.js` is a browser IIFE (`var Gantt = ...`) with
+no ES/CommonJS export, and its ES source imports a `.scss` file the Angular builder can't load from
+JS. So the prebuilt script and CSS are registered in `angular.json` (`scripts`/`styles`) and
+`FrappeGanttRenderer` reads `globalThis.Gantt` — don't switch back to `import Gantt from ...`, it
+fails under `ng serve` and silently bundles an empty module in production builds.
+
 If a future requirement needs resource histograms, baselines, or critical-path highlighting beyond
 what Frappe Gantt offers, evaluate DHTMLX Gantt Community Edition (GPLv2, requires either open-sourcing
 Chronos or a commercial license) at that point — not before, since it isn't license-cost-free.
@@ -146,7 +152,10 @@ attaches the bearer token to every request except `/api/auth/*`, `authGuard` pro
 ## Projects / Gantt
 
 `POST /api/projects` creates a `Project` (`OrganizationId` from the token) — no extra authorization
-policy today, any authenticated user in the org can create one. `POST /api/projects/{id}/tasks`
+policy today, any authenticated user in the org can create one. `GET /api/projects` lists the
+caller's org's projects and `GET /api/projects/{id}` returns one; both return `ProjectDto` with its
+tasks inlined (each `GanttTaskDto` carries `Dependencies`, the predecessor task ids).
+`POST /api/projects/{id}/tasks`
 adds a `GanttTask` to it; `GET /api/projects/{id}/tasks` lists them; `PATCH
 /api/projects/{id}/tasks/{taskId}/assignee` (body `{ "userId": <guid-or-null> }`) assigns/unassigns
 a task, first step of the resource-availability epic (see `IMPLEMENTATION_PLAN.md`). All three are
@@ -155,6 +164,12 @@ not-found-for-both-cases pattern as role promotion. See `ProjectRepository.Track
 non-obvious EF Core gotcha this surfaced: adding a task to a `Project` reloaded from the DB (not
 just constructed) needs its entry explicitly marked `Added`, or EF's change tracker mistakes the
 new owned entity for an existing one and the save fails.
+
+Frontend: `/projects` (list + create, links to each Gantt page), `/projects/:projectId/gantt`
+(`ProjectGanttPageComponent`: loads the project, adds tasks, assigns them via the same assignee
+picker, renders `GanttChartComponent`, lists linked Kanban boards), and `/project-load` (project × ISO-week grid, one quarter at a time, cell =
+number of tasks overlapping that week, optional project-subset filter; bucketing is client-side
+from `GET /api/projects`).
 
 ## Kanban boards
 
@@ -172,7 +187,14 @@ its originating Gantt task without duplicating schedule data); `PATCH
 assigns/unassigns a card, same pattern as task assignment. No extra authorization policy beyond
 authentication, same as Project/GanttTask. `BoardRepository.TrackNewColumn`/`TrackNewCard` apply
 the same explicit-`Added`-marking fix as `ProjectRepository.TrackNewTask`, needed at both owned
-levels here. Backend only — no frontend yet (see `IMPLEMENTATION_PLAN.md`).
+levels here.
+
+Frontend: `/boards` (`KanbanBoardsPageComponent` + `KanbanBoardComponent`). Cards are assigned via
+an assignee picker over `GET /api/users/directory` (any org member; id/display name/department only —
+email/role lookup via `GET /api/users?email=` stays `AdminOnly`). A board can be linked
+to a project when created; a linked board links to that project's Gantt page, and new cards on it
+can be linked to one of the project's tasks (shown on the card). `/boards?boardId=<id>` preselects
+a board — the Gantt page's "Linked Kanban boards" list uses it.
 
 ## Leave (ferie) workflow
 
@@ -202,9 +224,13 @@ query. `projectId`, if given, narrows which tasks/boards are considered (that pr
 boards linked to it via `Board.ProjectId`) but never narrows the leave side, since leave isn't
 project-scoped. Only `Approved` leave is ever included — pending stays private, matching the
 existing `/api/leave-requests` visibility rules. Kanban cards have no schedule of their own, so
-they're included whenever assigned, regardless of `from`/`to`. Backend only — no frontend yet
-(no department/Kanban picker UI, no calendar page). See `IMPLEMENTATION_PLAN.md` for the epic's
-full design decisions and remaining frontend work.
+they're included whenever assigned, regardless of `from`/`to`. See `IMPLEMENTATION_PLAN.md` for
+the epic's full design decisions.
+
+Frontend: `/availability` renders approved leave as an employee × day grid for one month
+(prev/next), filterable by department and project. Because the project filter never narrows leave
+server-side, the page applies it to rows instead: with a project selected, only people with tasks
+or cards assigned in that project are shown.
 
 ## Running locally
 

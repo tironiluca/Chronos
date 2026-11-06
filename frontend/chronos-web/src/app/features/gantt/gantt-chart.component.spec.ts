@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { GanttChartComponent } from './gantt-chart.component';
 import { GANTT_RENDERER, IGanttRenderer } from './gantt-renderer';
 import { GanttTaskDto } from '../../core/api/project.model';
+import { makeTask } from '../../testing/fake-project-service';
 
 // Fake adapter: proves the DIP boundary works -- the component is tested with zero
 // dependency on the real Frappe Gantt / SVG rendering engine.
@@ -20,12 +21,10 @@ class FakeGanttRenderer implements IGanttRenderer {
   destroy(): void {}
 }
 
-const task1: GanttTaskDto = {
-  id: '1', name: 'Install PLC', startDate: '2026-01-05', endDate: '2026-01-10', progressPercent: 0, dependencies: []
-};
-const task2: GanttTaskDto = {
-  id: '2', name: 'Test PLC', startDate: '2026-01-11', endDate: '2026-01-12', progressPercent: 0, dependencies: ['1']
-};
+const task1: GanttTaskDto = makeTask({ id: '1', name: 'Install PLC', startDate: '2026-01-05', endDate: '2026-01-10' });
+const task2: GanttTaskDto = makeTask({
+  id: '2', name: 'Test PLC', startDate: '2026-01-11', endDate: '2026-01-12', dependencies: ['1']
+});
 
 describe('GanttChartComponent', () => {
   let fakeRenderer: FakeGanttRenderer;

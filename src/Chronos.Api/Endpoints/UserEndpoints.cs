@@ -5,6 +5,7 @@ using Chronos.Application.Users.Commands.AssignUserDepartment;
 using Chronos.Application.Users.Commands.PromoteUserRole;
 using Chronos.Application.Users.Queries.GetRightsForRole;
 using Chronos.Application.Users.Queries.GetUserByEmail;
+using Chronos.Application.Users.Queries.GetUserDirectory;
 using Chronos.Domain.Users;
 
 namespace Chronos.Api.Endpoints;
@@ -24,6 +25,14 @@ public static class UserEndpoints
             var result = await sender.Send(new GetUserByEmailQuery(user.GetOrganizationId(), email));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
         }).RequireAuthorization("AdminOnly");
+
+        // Any authenticated org member: id/display name/department only (no email/role), for
+        // assignee pickers. The caller's org always comes from the token.
+        group.MapGet("/directory", async (ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new GetUserDirectoryQuery(user.GetOrganizationId()));
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
+        });
 
         // Admin-only: the caller's own organization is always used as the scope, so an Admin can
         // never promote/demote a user belonging to a different organization (see

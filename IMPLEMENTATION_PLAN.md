@@ -1,7 +1,8 @@
 # Chronos — Implementation Plan
 
-Status as of commit `78169b2` (resource-availability query, step 4 of the resource-availability
-epic, pushed — matches `origin/main`, tree clean as of 2026-09-28). Working reference for picking
+Status as of 2026-11-06: resource-availability epic **complete** (backend + frontend) on branch
+`ccr-85238cc1-tu6me9`. CI (`ci.yml`) only triggers on push/PR to `main`, so feature-branch pushes
+don't run it; provider coverage for this branch was confirmed locally instead (see Done). Working reference for picking
 the project back up — not a spec. Compressed to gotchas/decisions worth keeping; full narrative is
 in git history (`git log --oneline`) if ever needed.
 
@@ -117,8 +118,49 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   - First query-side `IValidator` in the codebase (`GetResourceAvailabilityQueryValidator`: `To >=
     From`) — every other validator so far was command-only; nothing in `ValidationBehavior`
     actually required that, it just hadn't come up yet.
-  - No frontend yet (see Planned section below).
-- Last verified (2026-09-28): backend 167/167 non-container tests (Domain 37, Application 67,
+  - Frontend: see "Resource-availability epic frontend" below.
+- **`GET /api/projects` + `GET /api/projects/{id}`**: `GetProjectsByOrganizationQuery` (reuses
+  `GetDetailedByOrganizationAsync`, ordered by name) and `GetProjectByIdQuery`, both returning
+  `ProjectDto` with tasks inlined. `GanttTaskDto` gained `Dependencies` (predecessor ids) and a
+  shared `GanttTaskDto.From(GanttTask)` mapper (the only other construction site,
+  `GetTasksByProjectQueryHandler`, now uses it). Not-found and cross-org return the same 400 +
+  message, as everywhere else. No new repository method, no migration.
+- **User directory + assignee pickers**: `GET /api/users/directory` (any org member;
+  `UserDirectoryEntryDto` = `Id`/`DisplayName`/`DepartmentId` only — no email/role, so the
+  `AdminOnly` email lookup stays the only way to see those). Frontend `UserPickerComponent` is
+  presentational (parent fetches the directory once, so N cards/tasks = 1 request). Kanban cards
+  assign through it (the email-lookup flow and the now-unused `UserService.getByEmail` client
+  method are gone); the Gantt page gained a task list with an assignee picker per task
+  (`PATCH .../tasks/{taskId}/assignee`). Verified live as a plain Employee.
+- **Resource-availability epic frontend** (Angular, all behind `authGuard`):
+  - `/departments`: `DepartmentPickerComponent` (flattened tree) + Admin create form.
+  - `/boards`: board list/create (optional linked project via `ProjectPickerComponent`) + board
+    detail (columns/cards, assign by email via `GET /api/users?email=`). `?boardId=` preselects.
+  - `/availability`: employee × day leave grid (`LeaveGridComponent`), month pagination, department
+    + project filters. The project filter can't narrow leave server-side (by design), so the page
+    narrows **rows** to people with `AssignedTasks`/`AssignedCards` in that project.
+  - `/projects`: project list/create → `/projects/:projectId/gantt`
+    (`ProjectGanttPageComponent`: loads via `GET /api/projects/{id}`, add task, renders
+    `GanttChartComponent`, lists linked boards).
+  - `/project-load`: project × ISO-week grid (`ProjectLoadGridComponent`), quarter pagination,
+    cell = count of tasks overlapping the week, project-subset chip filter. Week math in
+    `features/projects/iso-week.ts` (ISO-8601 week-year aware — 2026 has a W53). One fetch of
+    `GET /api/projects`; quarter navigation is client-side re-bucketing, no refetch.
+  - Kanban ↔ Gantt cross-links: a project-linked board links to its Gantt page, offers the
+    project's tasks when creating a card (`GanttTaskId`), and shows the linked task on the card;
+    the Gantt page lists its boards with `/boards?boardId=` deep links.
+  - `withComponentInputBinding()` is on — route params/query params bind to routed components'
+    inputs (`projectId`, `boardId`).
+  - Spec fakes for `ProjectService` live in `src/app/testing/` (excluded from `tsconfig.app.json`).
+- Last verified (2026-11-06, this pass, locally): backend 184/184 non-container tests (Domain 37,
+  Application 75, Infrastructure 16, Api 56), frontend 73/73 Jest, `ng build` clean, plus a
+  Playwright smoke run against the real API (Sqlite) + `ng serve`: projects → board linked to a
+  project → card linked to a task → Gantt page renders and adds a task → back to the board via
+  `?boardId=` → project-load grid + chip filter → availability project filter; zero console errors.
+  Container suites run locally too (`dockerd` is installed in the cloud sandbox, just not started —
+  `nohup dockerd &` first): `SqlServerRepositoryTests` 3/3, `PostgreSqlRepositoryTests` 3/3, same
+  filters as CI's provider jobs. Docker Hub may 429 the `postgres:15.1` pull — retry `docker pull`.
+- Previously verified (2026-09-28): backend 167/167 non-container tests (Domain 37, Application 67,
   Infrastructure 16, Api 50 — the +3/+3 over the availability-query counts is the `GET
   /api/users?email=` lookup endpoint above), frontend 18/18 locally, **plus CI green on all four
   jobs for `78169b2`** (Backend Sqlite/SqlServer/PostgreSql + Frontend Jest, confirmed via GitHub
@@ -140,6 +182,21 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   instead of a host-template rebind.
 - Enum request bodies need `JsonStringEnumConverter` registered explicitly (`ConfigureHttpJsonOptions`)
   or `"Vacation"` 400s before reaching a handler.
+- **frappe-gantt 0.6 cannot be `import`ed.** `dist/frappe-gantt.js` is a browser IIFE with no
+  export: `import Gantt from ...` errors under `ng serve` (Vite: "does not provide an export named
+  'default'") and silently bundles an empty module in `ng build`. Its ES source imports `.scss`,
+  which the Angular builder won't load from JS. Fixed by loading the dist script/CSS via
+  `angular.json` `scripts`/`styles` and reading `globalThis.Gantt` in `FrappeGanttRenderer`. Until
+  this pass the Gantt page had never rendered — no UI linked to it, the route pointed at
+  `GanttChartComponent` directly (required `tasks` input never set), and `GET /api/projects/{id}`
+  didn't exist.
+- `<select [value]="...">` doesn't preselect when the options come from `@for`: the value binding
+  is applied before the options exist. Use `[selected]` per `<option>` (all three pickers now do).
+- httpResource fakes in specs must be **lazy** (`computed`, not `signal(id())`): reading a
+  required input inside the id source at construction throws NG0950, which the real httpResource
+  never does.
+- `.toolbar` only got flex layout on `<form>` (global `form {display:flex}`) — now flex on any
+  element.
 - EF owned collections (`OwnsMany`), any depth: adding to one via mutation of an already-tracked
   parent needs an explicit `_context.Entry(x).State = EntityState.Added` (`TrackNew*` repository
   methods) — see the `GanttTask`/Kanban bug above. Check for this pattern whenever a new
@@ -152,6 +209,11 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 - Org/user self-registration is fully open — anyone can `POST /api/organizations` or register into
   any org with no invite/verification step. Fine for local dev, not for real deployment.
 - Stale "validators aren't wired" comments in a few command handlers (see Done, harmless).
+- No command adds a `TaskDependency` yet, so the Gantt chart never draws dependency arrows in
+  practice (the DTO/renderer path is wired). The "`TrackNewTask`-class bug, one level deeper"
+  concern for `TaskDependency` stays unverified until that command exists.
+- `jest.config.ts` still has a `frappe-gantt` entry in `transformIgnorePatterns`; dead since the
+  global-script change, harmless.
 
 ## Not started
 
@@ -159,81 +221,32 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 - Invite/verification gating for org + user self-registration.
 - E2E in CI — needs API + DB running alongside the dev server; deliberately deferred rather than
   built speculatively. Revisit if E2E starts getting skipped in practice.
-- Resource-availability epic beyond `Department`/`GanttTask.AssignedUserId`/Kanban/the availability
-  query (see below) — all frontend for this epic (including Kanban board UI).
+- Editing/moving existing items in the UI: rescheduling tasks, moving Kanban cards between
+  columns, task progress — neither API commands nor UI exist (create/assign only).
 
-## Planned: cross-department resource availability (shared vacation calendar × Gantt × Kanban)
+## Done epic: cross-department resource availability (shared vacation calendar × Gantt × Kanban)
 
-Settled with the user 2026-09-27: shared vacation calendar across departments, cross-referenced
-against Gantt and Kanban, so availability reads against time/project/department at once.
-Domain pieces (`Department`, `GanttTask.AssignedUserId`, Kanban) and the availability query are
-done — see Done above. Only the frontend for this epic is still unbuilt.
-
-**Settled design decisions** (supersede any earlier open questions):
-- Departments are **nested** (`ParentDepartmentId`) — "department Y" in queries means Y **plus
-  descendants** by default. Not resolved anywhere yet — do it in the availability query by loading
-  `GetDepartmentsByOrganizationAsync` and walking the tree in memory (org department counts are
-  small); don't reach for recursive SQL.
+Settled with the user 2026-09-27; **complete as of 2026-11-06** (backend + frontend — see Done).
+Design decisions kept here because they still constrain future changes:
+- Departments are **nested** (`ParentDepartmentId`) — "department Y" means Y **plus descendants**,
+  walked in memory from the flat list; no recursive SQL.
 - **At most one department per user** (`User.DepartmentId`, nullable 1:1, no matrix membership).
 - **Kanban boards may stand alone** (`Board.ProjectId` optional).
 - **Shared calendar shows approved leave only** — pending stays private until approved.
-
-**Proposed shape, remaining piece:**
-- Frontend: cross-department calendar page (filterable by department/project, rendering
-  `GET /api/resources/availability`) + Kanban board component, cross-linked with the existing
-  `GanttChartComponent`. No frontend exists yet for departments or Kanban either (no
-  picker/management/board UI) — needed before the calendar page is usable. **Next up.**
-- **New story: leave calendar as an employee × day grid.** Render the shared vacation calendar
-  as a grid — rows are employees, columns are the days of a single month — so overlapping leave
-  across people is visible at a glance (the thing a list view of `ApprovedLeave` per user hides).
-  Paginated one month at a time (prev/next month, not infinite scroll), since a full org × full
-  year grid doesn't fit/scale. Data source is the existing `GET /api/resources/availability`
-  (`ApprovedLeave` per user) — call it with `from`/`to` set to the visible month's bounds, refetch
-  on month navigation. Each employee row's cells shade for days covered by an approved leave range
-  (handle ranges spanning outside the visible month at the edges). Reuses the same
-  department/project filters as the calendar page above rather than being a separate filter UI.
-  Sequence after the department/Kanban picker UI (this story needs a department filter to be
-  useful for larger orgs) but can land before or alongside the Gantt/Kanban cross-linking, since
-  it only depends on `ApprovedLeave`, not `AssignedTasks`/`AssignedCards`.
-- **New story: multi-project calendar as a project × week-number grid.** Same "overlap made
-  visible" idea as the employee × day leave grid above, but the other axis: rows are **projects**,
-  columns are **ISO week numbers** (not days — a quarter/half-year of days wouldn't fit a screen
-  the way a month of days does) so cross-project scheduling load is visible at a glance. Each cell
-  shades/summarizes that project's `GanttTask` coverage for the week (e.g. count of tasks
-  overlapping the week). Paginated by quarter (prev/next), not infinite scroll — same pagination
-  shape as the leave grid, different unit.
-  - **Data-source gap, unlike the leave grid**: no existing endpoint fits. `GET
-    /api/resources/availability` is per-*user*, not per-project, and there is no `GET
-    /api/projects` list endpoint at all yet (only `POST /api/projects` and per-project `GET
-    /api/projects/{id}/tasks`). Needs a new query — e.g. `GetProjectsByOrganizationQuery` — reusing
-    `IProjectRepository.GetDetailedByOrganizationAsync` (`.Include(p => p.Tasks)`, already added
-    for the availability query, see Done above) rather than a new repository method. Bucket task
-    date ranges (`GanttTask.StartDate`/`EndDate`) into ISO week columns client-side, same
-    "no server-side date bucketing" precedent as the leave grid (which buckets `ApprovedLeave`
-    ranges into day columns client-side from raw data).
-  - Department filter doesn't apply here (projects aren't department-scoped) — only a
-    project-subset filter, if any, reusing whatever picker pattern the department/Kanban picker
-    UI establishes.
-  - Independent of the employee × day leave grid (different data, different new query) — can land
-    before, after, or alongside it, but both should share HTTP client/grid-rendering conventions
-    with the cross-department calendar page for consistency.
+- Grids bucket dates **client-side** from raw ranges (leave → days, tasks → ISO weeks); no
+  server-side date bucketing. Both grids paginate (month / quarter), never infinite scroll.
+- The project × week grid has no department filter (projects aren't department-scoped).
 
 ## Suggested next steps, in order
 
-1. ~~Reconfirm CI is green on all four jobs for `b922aa7`~~ — **done 2026-09-28**, confirmed via
-   GitHub check-runs API: Backend (Sqlite/SqlServer/PostgreSql) + Frontend (Jest) all green.
-2. ~~The resource-availability query~~ — **done, pushed, and CI-green 2026-09-28** (`78169b2`, see
-   Done above) — first pass exercising the new cross-aggregate query against real
-   SqlServer/PostgreSql providers, not just Sqlite.
-3. Resource-availability epic frontend: department/task/board picker UI (none exists for
-   departments or Kanban yet) + the cross-department calendar page rendering
-   `GET /api/resources/availability` + a Kanban board component, cross-linked with the existing
-   `GanttChartComponent`. The one piece standing between this epic and being user-usable.
-   Includes the employee × day leave grid story (see Planned section) for spotting overlapping
-   leave within a month.
-4. Cross-org Admin visibility for leave requests — same shape of gap as cross-department
-   visibility above, worth solving once rather than building two "who can see whose stuff"
-   mechanisms.
+1. ~~Confirm provider coverage for this pass~~ — **done 2026-11-06** locally (container suites,
+   see Done). Real CI runs once the branch goes to `main` via PR.
+2. ~~Org-wide user directory + assignee pickers~~ — **done 2026-11-06** (see Done).
+3. Edit commands + UI: reschedule task / update progress / add dependency (verify the
+   `TaskDependency` owned-collection add path then), move card between columns.
+4. Cross-org Admin visibility for leave requests — worth solving once rather than building two
+   "who can see whose stuff" mechanisms.
 5. Refresh-token flow on the frontend.
 6. Decide on invite/verification gating for org + user self-registration before this goes beyond
    local dev.
+7. E2E in CI — the Playwright smoke flow from this pass is a ready-made first scenario.

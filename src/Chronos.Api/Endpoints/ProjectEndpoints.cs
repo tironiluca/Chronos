@@ -4,6 +4,8 @@ using Chronos.Api.Security;
 using Chronos.Application.Projects.Commands.AssignGanttTaskUser;
 using Chronos.Application.Projects.Commands.CreateGanttTask;
 using Chronos.Application.Projects.Commands.CreateProject;
+using Chronos.Application.Projects.Queries.GetProjectById;
+using Chronos.Application.Projects.Queries.GetProjectsByOrganization;
 using Chronos.Application.Projects.Queries.GetTasksByProject;
 
 namespace Chronos.Api.Endpoints;
@@ -23,6 +25,20 @@ public static class ProjectEndpoints
             return result.IsSuccess
                 ? Results.Created($"/api/projects/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
+        });
+
+        // Any authenticated org member may list/read projects -- same as GET /api/boards and
+        // GET /api/departments. Each project carries its tasks inline (see ProjectDto).
+        group.MapGet("/", async (ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new GetProjectsByOrganizationQuery(user.GetOrganizationId()));
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
+        });
+
+        group.MapGet("/{projectId:guid}", async (Guid projectId, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new GetProjectByIdQuery(user.GetOrganizationId(), projectId));
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
         });
 
         // No extra policy beyond authentication, same as project creation above -- this codebase

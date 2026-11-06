@@ -4,18 +4,20 @@ import { AvailabilityCalendarPageComponent } from './availability-calendar-page.
 import { ResourceAvailabilityService } from '../../core/api/resource-availability.service';
 import { DepartmentService } from '../../core/api/department.service';
 import { ResourceAvailabilityDto } from '../../core/api/resource-availability.model';
+import { ProjectService } from '../../core/api/project.service';
+import { createFakeProjectService } from '../../testing/fake-project-service';
 
 // Both services are faked rather than the transport: this test targets the page's own month
 // navigation/filter wiring, not httpResource's fetch-and-cache behaviour (same convention as
 // LeaveRequestListComponent's spec).
-function createFakeAvailabilityService() {
+function createFakeAvailabilityService(entries: ResourceAvailabilityDto[] = []) {
   const requestedParams: unknown[] = [];
   let params: () => { departmentId: string | null; projectId: string | null; from: string; to: string };
   return {
     availabilityResource: (p: typeof params) => {
       params = p;
       return {
-        value: signal<ResourceAvailabilityDto[]>([]),
+        value: signal<ResourceAvailabilityDto[]>(entries),
         isLoading: signal(false),
         error: signal(undefined),
         reload: jest.fn()
@@ -40,13 +42,14 @@ function createFakeDepartmentService() {
 }
 
 describe('AvailabilityCalendarPageComponent', () => {
-  function setup() {
-    const fakeAvailabilityService = createFakeAvailabilityService();
+  function setup(entries: ResourceAvailabilityDto[] = []) {
+    const fakeAvailabilityService = createFakeAvailabilityService(entries);
     TestBed.configureTestingModule({
       imports: [AvailabilityCalendarPageComponent],
       providers: [
         { provide: ResourceAvailabilityService, useValue: fakeAvailabilityService },
-        { provide: DepartmentService, useValue: createFakeDepartmentService() }
+        { provide: DepartmentService, useValue: createFakeDepartmentService() },
+        { provide: ProjectService, useValue: createFakeProjectService() }
       ]
     });
 
@@ -87,5 +90,29 @@ describe('AvailabilityCalendarPageComponent', () => {
     );
 
     expect(fakeAvailabilityService.captureParams().departmentId).toBe('dept-1');
+  });
+
+  it('re-queries with the selected project id and narrows rows to people with work in it', () => {
+    const entry = (userId: string, withTask: boolean): ResourceAvailabilityDto => ({
+      userId,
+      displayName: userId,
+      departmentId: null,
+      approvedLeave: [],
+      assignedTasks: withTask
+        ? [{ id: 't1', projectId: 'project-1', name: 'Task', startDate: '2026-01-01', endDate: '2026-01-02' }]
+        : [],
+      assignedCards: []
+    });
+    const { fixture, fakeAvailabilityService } = setup([entry('on-project', true), entry('off-project', false)]);
+    const page = fixture.componentInstance as unknown as {
+      projectId: { set(v: string | null): void };
+      rows(): ResourceAvailabilityDto[];
+    };
+    expect(page.rows().map((r) => r.userId)).toEqual(['on-project', 'off-project']);
+
+    page.projectId.set('project-1');
+
+    expect(fakeAvailabilityService.captureParams().projectId).toBe('project-1');
+    expect(page.rows().map((r) => r.userId)).toEqual(['on-project']);
   });
 });

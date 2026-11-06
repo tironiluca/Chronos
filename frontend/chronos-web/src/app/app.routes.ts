@@ -29,10 +29,23 @@ export const routes: Routes = [
       import('./features/leave/leave-requests-page.component').then((m) => m.LeaveRequestsPageComponent)
   },
   {
+    path: 'projects',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/projects/projects-page.component').then((m) => m.ProjectsPageComponent)
+  },
+  {
+    // projectId is bound to ProjectGanttPageComponent's input via withComponentInputBinding.
     path: 'projects/:projectId/gantt',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/gantt/gantt-chart.component').then((m) => m.GanttChartComponent)
+      import('./features/gantt/project-gantt-page.component').then((m) => m.ProjectGanttPageComponent)
+  },
+  {
+    path: 'project-load',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/projects/project-load-page.component').then((m) => m.ProjectLoadPageComponent)
   },
   {
     path: 'departments',
