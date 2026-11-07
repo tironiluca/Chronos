@@ -64,6 +64,63 @@ public class ProjectRepositoryTests : IDisposable
         reloadedAgain!.Tasks.Should().ContainSingle(t => t.Name == "Install PLC");
     }
 
+    // The "TrackNewTask-class bug, one level deeper" check from IMPLEMENTATION_PLAN.md:
+    // TaskDependency is OwnsMany'd under GanttTask (itself OwnsMany'd under Project). Asserted
+    // through a fresh DbContext so identity resolution can't mask a write that never happened.
+    [Fact]
+    public async Task AddTaskDependency_ToReloadedProject_ThenSaveChanges_Persists()
+    {
+        var repository = new ProjectRepository(_context);
+        var project = new Project(Guid.NewGuid(), "Line 3 Upgrade", "L3U", new DateOnly(2026, 1, 1));
+        var design = project.AddTask("Design", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+        var build = project.AddTask("Build", new DateOnly(2026, 1, 12), new DateOnly(2026, 1, 20));
+        await repository.AddAsync(project);
+        await repository.SaveChangesAsync();
+
+        using (var editContext = NewContext())
+        {
+            var editRepository = new ProjectRepository(editContext);
+            var reloaded = await editRepository.GetByIdAsync(project.Id);
+            reloaded!.AddTaskDependency(build.Id, design.Id, DependencyType.FinishToStart, 2);
+            await editRepository.SaveChangesAsync();
+        }
+
+        using var verifyContext = NewContext();
+        var persisted = await new ProjectRepository(verifyContext).GetByIdAsync(project.Id);
+        var dependency = persisted!.Tasks.Single(t => t.Id == build.Id).Dependencies.Should().ContainSingle().Subject;
+        dependency.PredecessorTaskId.Should().Be(design.Id);
+        dependency.Type.Should().Be(DependencyType.FinishToStart);
+        dependency.LagDays.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task RescheduleAndUpdateProgress_OnReloadedProject_ThenSaveChanges_Persists()
+    {
+        var repository = new ProjectRepository(_context);
+        var project = new Project(Guid.NewGuid(), "Line 3 Upgrade", "L3U", new DateOnly(2026, 1, 1));
+        var task = project.AddTask("Design", new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 10));
+        await repository.AddAsync(project);
+        await repository.SaveChangesAsync();
+
+        using (var editContext = NewContext())
+        {
+            var editRepository = new ProjectRepository(editContext);
+            var reloadedTask = (await editRepository.GetByIdAsync(project.Id))!.Tasks.Single();
+            reloadedTask.Reschedule(new DateOnly(2026, 2, 2), new DateOnly(2026, 2, 6));
+            reloadedTask.UpdateProgress(40);
+            await editRepository.SaveChangesAsync();
+        }
+
+        using var verifyContext = NewContext();
+        var persisted = (await new ProjectRepository(verifyContext).GetByIdAsync(project.Id))!.Tasks.Single();
+        persisted.StartDate.Should().Be(new DateOnly(2026, 2, 2));
+        persisted.EndDate.Should().Be(new DateOnly(2026, 2, 6));
+        persisted.ProgressPercent.Should().Be(40);
+    }
+
+    private ChronosDbContext NewContext() =>
+        new(new DbContextOptionsBuilder<ChronosDbContext>().UseSqlite(_connection).Options);
+
     // Regression coverage for the resource-availability query (see IMPLEMENTATION_PLAN.md), which
     // needs every project's tasks loaded across a whole organization in one call.
     [Fact]

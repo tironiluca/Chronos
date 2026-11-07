@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { GanttTaskDto } from '../../core/api/project.model';
-import { IGanttRenderer } from './gantt-renderer';
+import { GanttChangeHandlers, IGanttRenderer } from './gantt-renderer';
 
 // Minimal shape of what we actually call on a Gantt instance. frappe-gantt ships no .d.ts, so
 // this local interface is the only thing we type against.
@@ -24,17 +24,41 @@ function frappeGantt(): FrappeGanttConstructor {
   return ctor;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Local calendar date of the midnight nearest to `date`, as 'YYYY-MM-DD'. Frappe derives dragged
+// dates by adding fractional hours to its chart origin, so a bar dropped across a DST boundary can
+// land at 23:00 or 01:00 instead of midnight -- rounding absorbs that.
+export function toNearestIsoDate(date: Date): string {
+  const rounded = new Date(date.getTime() + DAY_MS / 2);
+  const y = rounded.getFullYear();
+  const m = String(rounded.getMonth() + 1).padStart(2, '0');
+  const d = String(rounded.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// Frappe 0.6 treats a date-only end as exclusive (end + 24h) internally and reports a dragged end
+// as (exclusive end - 1 second). Map that back to our inclusive end date.
+export function frappeEndToIsoDate(end: Date): string {
+  return toNearestIsoDate(new Date(end.getTime() + 1000 - DAY_MS));
+}
+
 // Adapter around Frappe Gantt (MIT license -- see README for the library choice rationale).
 // Kept deliberately thin: all Frappe-specific mapping lives here, nowhere else.
 @Injectable()
 export class FrappeGanttRenderer implements IGanttRenderer {
   private instance: FrappeGanttInstance | null = null;
 
-  render(container: HTMLElement, tasks: GanttTaskDto[]): void {
+  render(container: HTMLElement, tasks: GanttTaskDto[], handlers?: GanttChangeHandlers): void {
     const Gantt = frappeGantt();
     this.instance = new Gantt(container, this.toFrappeTasks(tasks), {
       view_mode: 'Week',
-      date_format: 'YYYY-MM-DD'
+      date_format: 'YYYY-MM-DD',
+      // Frappe fires these once per completed drag (mouseup), not per pixel moved.
+      on_date_change: (task: { id: string }, start: Date, end: Date) =>
+        handlers?.dateChange(task.id, toNearestIsoDate(start), frappeEndToIsoDate(end)),
+      on_progress_change: (task: { id: string }, progress: number) =>
+        handlers?.progressChange(task.id, Math.max(0, Math.min(100, Math.round(progress))))
     });
   }
 

@@ -38,3 +38,21 @@ export interface CreateGanttTaskPayload {
   endDate: string; // ISO date
   parentTaskId: string | null;
 }
+
+export interface RescheduleGanttTaskPayload {
+  startDate: string; // ISO date
+  endDate: string; // ISO date
+}
+
+export interface UpdateGanttTaskProgressPayload {
+  progressPercent: number; // 0..100
+}
+
+// Serialized as its name -- the API registers JsonStringEnumConverter.
+export type DependencyType = 'FinishToStart' | 'StartToStart' | 'FinishToFinish' | 'StartToFinish';
+
+export interface AddGanttTaskDependencyPayload {
+  predecessorTaskId: string;
+  type: DependencyType;
+  lagDays: number; // negative = lead
+}

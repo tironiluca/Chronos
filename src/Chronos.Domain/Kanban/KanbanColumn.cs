@@ -30,4 +30,14 @@ public class KanbanColumn : Entity
         _cards.Add(card);
         return card;
     }
+
+    // Board.MoveCard is the only caller -- moving a card is a board-level operation, since it
+    // touches two columns of the same aggregate.
+    internal void DetachCard(KanbanCard card) => _cards.Remove(card);
+
+    internal void AttachCard(KanbanCard card)
+    {
+        card.MoveToColumn(Id);
+        _cards.Add(card);
+    }
 }

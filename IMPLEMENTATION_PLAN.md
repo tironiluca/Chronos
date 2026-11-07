@@ -1,7 +1,7 @@
 # Chronos — Implementation Plan
 
-Status as of 2026-11-06: resource-availability epic **complete** (backend + frontend) on branch
-`ccr-85238cc1-tu6me9`. CI (`ci.yml`) only triggers on push/PR to `main`, so feature-branch pushes
+Status as of 2026-11-07: resource-availability epic **complete**, plus step 3 (task edit
+commands + card moves, backend + UI) on branch `ccr-85238cc1-tu6me9`. CI (`ci.yml`) only triggers on push/PR to `main`, so feature-branch pushes
 don't run it; provider coverage for this branch was confirmed locally instead (see Done). Working reference for picking
 the project back up — not a spec. Compressed to gotchas/decisions worth keeping; full narrative is
 in git history (`git log --oneline`) if ever needed.
@@ -132,6 +132,28 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   assign through it (the email-lookup flow and the now-unused `UserService.getByEmail` client
   method are gone); the Gantt page gained a task list with an assignee picker per task
   (`PATCH .../tasks/{taskId}/assignee`). Verified live as a plain Employee.
+- **Edit commands + UI (step 3)**: `PATCH .../tasks/{taskId}/schedule`, `PATCH .../progress`,
+  `POST`/`DELETE .../tasks/{taskId}/dependencies[/{predecessorTaskId}]`, `PATCH
+  /api/boards/{id}/columns/{columnId}/cards/{cardId}/column` (README has the shapes).
+  - Domain throws, handlers map `InvalidOperationException`/`ArgumentException` to `Failure` (the
+    Leave handlers' existing pattern), so invariants live in one place.
+  - `Project.AddTaskDependency` owns the graph-level invariants (predecessor in the same project, no
+    cycles, DFS over predecessor edges); `GanttTask.AddDependency` owns the task-local ones
+    (self-reference, duplicate edge). This breaks the earlier "call methods directly on `GanttTask`"
+    convention on purpose: a cycle check needs the whole task graph. A dependency is identified by
+    its predecessor (at most one edge per pair), so it needs no id in URLs.
+  - `Board.MoveCard(cardId, from, to)` is the only way to move a card (`KanbanColumn.Detach/
+    AttachCard` and `KanbanCard.MoveToColumn` are `internal`); a target column on another board is
+    just "not found", so cards can't leak across boards or orgs.
+  - **Resolved the open `TaskDependency` concern**: adding a dependency to a reloaded project
+    persists **without** a `TrackNew*` call. Its key is an EF shadow `Guid` left at default until
+    save, so EF classifies it `Added` itself; the `TrackNew*` bug only affects entities whose `Id`
+    is set in the constructor. Re-parenting an owned `KanbanCard` keeps its identity. Both are
+    covered by infra tests that assert through a **fresh `DbContext`**. The older tests reuse one
+    context, where identity resolution can mask a write that never reached the DB.
+  - Frontend: `GanttTaskEditorComponent` (presentational, `linkedSignal` drafts re-sync after
+    reload); chart drag/resize/progress via new `GanttChangeHandlers` on `IGanttRenderer`; Kanban
+    "Move to…" select + native HTML5 drag-and-drop.
 - **Resource-availability epic frontend** (Angular, all behind `authGuard`):
   - `/departments`: `DepartmentPickerComponent` (flattened tree) + Admin create form.
   - `/boards`: board list/create (optional linked project via `ProjectPickerComponent`) + board
@@ -152,7 +174,13 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   - `withComponentInputBinding()` is on — route params/query params bind to routed components'
     inputs (`projectId`, `boardId`).
   - Spec fakes for `ProjectService` live in `src/app/testing/` (excluded from `tsconfig.app.json`).
-- Last verified (2026-11-06, this pass, locally): backend 184/184 non-container tests (Domain 37,
+- Last verified (2026-11-07, step 3, locally): backend 229/229 non-container tests (Domain 51,
+  Application 93, Infrastructure 19, Api 66), frontend 99/99 Jest, `ng build` clean, plus a
+  Playwright smoke run against the real API (Sqlite) + `ng serve`: reschedule/progress/add
+  dependency via the editor → Frappe draws the arrow → drag a bar one week (it and its dependent
+  persist, duration kept) → remove dependency → card moved via select and via drag-and-drop; zero
+  console errors. Container suites not re-run for this pass (no schema change).
+- Previously verified (2026-11-06, locally): backend 184/184 non-container tests (Domain 37,
   Application 75, Infrastructure 16, Api 56), frontend 73/73 Jest, `ng build` clean, plus a
   Playwright smoke run against the real API (Sqlite) + `ng serve`: projects → board linked to a
   project → card linked to a task → Gantt page renders and adds a task → back to the board via
@@ -166,6 +194,25 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   jobs for `78169b2`** (Backend Sqlite/SqlServer/PostgreSql + Frontend Jest, confirmed via GitHub
   check-runs API) — first real proof the cross-aggregate availability query works against real
   SqlServer/PostgreSql, not just Sqlite.
+
+- **Deployment (2026-11-07)**: Vercel project `chronos` (team "Luca's projects", framework
+  Services, git-linked to this repo) + Supabase project `chronos` (`dyrpcketvphbkyycxezu`,
+  eu-central-1, free plan). README's "Deployment" section has the layout and the env var table.
+  - Supabase: schema applied from the PostgreSql EF idempotent script (all 5 migrations recorded
+    in `__EFMigrationsHistory`), RLS deny-all on every table, API role `chronos_api` owns the
+    tables. Its password was deliberately reset to an unknown random value, so the owner must
+    set it (`ALTER ROLE chronos_api PASSWORD ...`) before the API can connect.
+  - Vercel: all three env vars are set (`DatabaseProvider` plain; `ConnectionStrings__PostgreSql`
+    and `Jwt__SigningKey` sensitive). On the owner's instruction the agent generated the secrets,
+    so they appear in that session's transcript; rotate them as described in the README if that
+    matters. Live preview: `/api/health` returns `{"status":"ok","database":"ok"}` from `fra1`, so
+    the container starts and the startup migration check runs as `chronos_api` through the
+    **`aws-1`** session pooler. `aws-0` returned "tenant/user not found".
+  - Not run live: the browser smoke. This sandbox's network policy refuses `*.vercel.app` and the
+    Vercel fetch tool is GET-only, so register/login/edit flows were covered by CI's PostgreSql job
+    plus a privilege check on `chronos_api`, not by a request against the deployment.
+  - Production = the project's production branch (`main`). Branch pushes create previews,
+    which sit behind Vercel Authentication.
 
 ### Gotchas learned the hard way (still true, worth not re-discovering)
 
@@ -202,6 +249,21 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   methods) — see the `GanttTask`/Kanban bug above. Check for this pattern whenever a new
   owned-collection-add code path is written.
 
+- frappe-gantt 0.6 dates: a date-only `end` is exclusive internally (end + 24h); `on_date_change`
+  reports (exclusive end − 1 s), and dragged dates are fractional-hour offsets from the chart origin,
+  which drift across DST. `FrappeGanttRenderer` rounds both to the nearest local midnight.
+- Playwright vs this UI: the sticky top nav covers elements that `scrollIntoViewIfNeeded` scrolled
+  to the top edge (scroll to top before pointer drags), and a Kanban card's centre is one of its
+  `<select>`s, so drag it by `.kanban-card-title`. Boards start with three default columns.
+
+- Vercel container services build with **the Dockerfile's own directory** as context, not the
+  service `root`, hence `src/Dockerfile`. Locally, `docker build` in this sandbox needs the agent
+  proxy CA added to the SDK stage (a throwaway Dockerfile variant, never committed). Vercel's
+  builders don't need it.
+- Supabase exposes `public` via PostgREST: any table created there without RLS is readable with
+  the anon key. New EF migrations that add tables must be followed by `ALTER TABLE ... ENABLE ROW
+  LEVEL SECURITY` (and owned by `chronos_api`). The advisor flags misses as `rls_disabled_in_public`.
+
 ## Known issues (still open)
 
 - Cross-org Admin visibility: every query (leave requests, role-promotion) is scoped to the
@@ -209,9 +271,9 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 - Org/user self-registration is fully open — anyone can `POST /api/organizations` or register into
   any org with no invite/verification step. Fine for local dev, not for real deployment.
 - Stale "validators aren't wired" comments in a few command handlers (see Done, harmless).
-- No command adds a `TaskDependency` yet, so the Gantt chart never draws dependency arrows in
-  practice (the DTO/renderer path is wired). The "`TrackNewTask`-class bug, one level deeper"
-  concern for `TaskDependency` stays unverified until that command exists.
+- Dependencies are informational: rescheduling doesn't enforce them, and `GanttTaskDto` exposes only
+  predecessor ids (no type/lag), so the UI can't display a dependency's type yet.
+- Kanban cards have no in-column order (moves append); no reordering within a column.
 - `jest.config.ts` still has a `frappe-gantt` entry in `transformIgnorePatterns`; dead since the
   global-script change, harmless.
 
@@ -221,8 +283,7 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 - Invite/verification gating for org + user self-registration.
 - E2E in CI — needs API + DB running alongside the dev server; deliberately deferred rather than
   built speculatively. Revisit if E2E starts getting skipped in practice.
-- Editing/moving existing items in the UI: rescheduling tasks, moving Kanban cards between
-  columns, task progress — neither API commands nor UI exist (create/assign only).
+- Renaming/deleting tasks, cards, columns and boards (create/edit/move only so far).
 
 ## Done epic: cross-department resource availability (shared vacation calendar × Gantt × Kanban)
 
@@ -242,11 +303,11 @@ Design decisions kept here because they still constrain future changes:
 1. ~~Confirm provider coverage for this pass~~ — **done 2026-11-06** locally (container suites,
    see Done). Real CI runs once the branch goes to `main` via PR.
 2. ~~Org-wide user directory + assignee pickers~~ — **done 2026-11-06** (see Done).
-3. Edit commands + UI: reschedule task / update progress / add dependency (verify the
-   `TaskDependency` owned-collection add path then), move card between columns.
+3. ~~Edit commands + UI~~ — **done 2026-11-07** (see Done).
 4. Cross-org Admin visibility for leave requests — worth solving once rather than building two
    "who can see whose stuff" mechanisms.
 5. Refresh-token flow on the frontend.
 6. Decide on invite/verification gating for org + user self-registration before this goes beyond
-   local dev.
+   local dev. **Now more pressing**: the app is deployed (behind Vercel Authentication for now).
+   Making it public without gating lets anyone create orgs/users.
 7. E2E in CI — the Playwright smoke flow from this pass is a ready-made first scenario.

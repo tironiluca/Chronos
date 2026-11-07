@@ -5,6 +5,7 @@ using Chronos.Application.Kanban.Commands.AssignKanbanCardUser;
 using Chronos.Application.Kanban.Commands.CreateBoard;
 using Chronos.Application.Kanban.Commands.CreateKanbanCard;
 using Chronos.Application.Kanban.Commands.CreateKanbanColumn;
+using Chronos.Application.Kanban.Commands.MoveKanbanCard;
 using Chronos.Application.Kanban.Queries.GetBoardById;
 using Chronos.Application.Kanban.Queries.GetBoardsByOrganization;
 
@@ -64,10 +65,20 @@ public static class KanbanEndpoints
             var result = await sender.Send(new AssignKanbanCardUserCommand(user.GetOrganizationId(), boardId, columnId, cardId, body.UserId));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
         });
+
+        // {columnId} is the card's current column; the body names the destination. The card's
+        // canonical URL changes afterwards (it lives under the target column).
+        group.MapPatch("/{boardId:guid}/columns/{columnId:guid}/cards/{cardId:guid}/column", async (
+            Guid boardId, Guid columnId, Guid cardId, MoveKanbanCardBody body, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new MoveKanbanCardCommand(user.GetOrganizationId(), boardId, columnId, cardId, body.TargetColumnId));
+            return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
+        });
     }
 
     public record CreateBoardBody(string Name, Guid? ProjectId);
     public record CreateKanbanColumnBody(string Name, int Order);
     public record CreateKanbanCardBody(string Title, Guid? GanttTaskId);
     public record AssignKanbanCardUserBody(Guid? UserId);
+    public record MoveKanbanCardBody(Guid TargetColumnId);
 }

@@ -28,6 +28,10 @@ public class KanbanCard : Entity
         GanttTaskId = ganttTaskId;
     }
 
+    // Only via Board.MoveCard (through KanbanColumn.AttachCard), so the card and the column
+    // collections can't disagree about where the card lives.
+    internal void MoveToColumn(Guid columnId) => ColumnId = columnId;
+
     // null unassigns the card.
     public void AssignUser(Guid? userId)
     {

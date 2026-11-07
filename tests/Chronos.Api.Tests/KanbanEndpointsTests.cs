@@ -168,4 +168,59 @@ public class KanbanEndpointsTests : IClassFixture<WebApplicationFactory<Program>
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    private async Task<Guid> CreateCardAsync(Guid boardId, Guid columnId, string title = "Install PLC") =>
+        await (await _client.PostAsJsonAsync($"/api/boards/{boardId}/columns/{columnId}/cards", new { Title = title, GanttTaskId = (Guid?)null }))
+            .Content.ReadFromJsonAsync<Guid>();
+
+    [Fact]
+    public async Task PatchCardColumn_MovesCardToTargetColumn()
+    {
+        UseToken(await AuthTestHelper.RegisterAndLoginAsync(_client, Guid.NewGuid(), "board-mover-1@example.com"));
+        var boardId = await CreateBoardAsync();
+        var todo = await CreateColumnAsync(boardId, "To Do", 0);
+        var done = await CreateColumnAsync(boardId, "Done", 1);
+        var cardId = await CreateCardAsync(boardId, todo);
+
+        var response = await _client.PatchAsJsonAsync(
+            $"/api/boards/{boardId}/columns/{todo}/cards/{cardId}/column", new { TargetColumnId = done });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var board = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/boards/{boardId}");
+        var columns = board.GetProperty("columns").EnumerateArray()
+            .ToDictionary(c => c.GetProperty("id").GetGuid(), c => c.GetProperty("cards"));
+        columns[todo].GetArrayLength().Should().Be(0);
+        columns[done].EnumerateArray().Select(c => c.GetProperty("id").GetGuid()).Should().Equal(cardId);
+    }
+
+    [Fact]
+    public async Task PatchCardColumn_ToColumnOfAnotherBoard_ReturnsBadRequest()
+    {
+        UseToken(await AuthTestHelper.RegisterAndLoginAsync(_client, Guid.NewGuid(), "board-mover-2@example.com"));
+        var boardId = await CreateBoardAsync();
+        var todo = await CreateColumnAsync(boardId, "To Do", 0);
+        var cardId = await CreateCardAsync(boardId, todo);
+        var otherBoardColumn = await CreateColumnAsync(await CreateBoardAsync("Other board"), "Done", 0);
+
+        var response = await _client.PatchAsJsonAsync(
+            $"/api/boards/{boardId}/columns/{todo}/cards/{cardId}/column", new { TargetColumnId = otherBoardColumn });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PatchCardColumn_ForBoardInAnotherOrganization_ReturnsBadRequest()
+    {
+        UseToken(await AuthTestHelper.RegisterAndLoginAsync(_client, Guid.NewGuid(), "board-mover-3@example.com"));
+        var boardId = await CreateBoardAsync();
+        var todo = await CreateColumnAsync(boardId, "To Do", 0);
+        var done = await CreateColumnAsync(boardId, "Done", 1);
+        var cardId = await CreateCardAsync(boardId, todo);
+        UseToken(await AuthTestHelper.RegisterAndLoginAsync(_client, Guid.NewGuid(), "board-mover-intruder@example.com"));
+
+        var response = await _client.PatchAsJsonAsync(
+            $"/api/boards/{boardId}/columns/{todo}/cards/{cardId}/column", new { TargetColumnId = done });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
 }
