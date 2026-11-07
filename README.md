@@ -312,13 +312,20 @@ Environment variables (Vercel → Project → Settings → Environment Variables
 | Key | Value | Type |
 | --- | --- | --- |
 | `DatabaseProvider` | `PostgreSql` | plain (already set) |
-| `ConnectionStrings__PostgreSql` | `Host=aws-0-eu-central-1.pooler.supabase.com;Port=5432;Database=postgres;Username=chronos_api.<project-ref>;Password=<password>;SSL Mode=Require;Maximum Pool Size=5;Timeout=15` | sensitive |
+| `ConnectionStrings__PostgreSql` | `Host=aws-1-eu-central-1.pooler.supabase.com;Port=5432;Database=postgres;Username=chronos_api.<project-ref>;Password=<password>;SSL Mode=Require;Maximum Pool Size=5;Timeout=15` | sensitive |
 | `Jwt__SigningKey` | ≥ 64 random characters, e.g. `openssl rand -base64 64` | sensitive |
 
 Set the `chronos_api` password yourself in the Supabase SQL editor (`ALTER ROLE chronos_api
 PASSWORD '<password>';`) and paste the same value into the connection string. If
-`/api/health` reports the database unreachable and the logs say "tenant or user not found",
-the project is on the other pooler cluster: change `aws-0` to `aws-1`.
+the logs say "tenant/user ... not found", the host points at the wrong pooler cluster. This
+project is on `aws-1`. Other projects can be on `aws-0`, and the dashboard's Connect dialog shows
+which.
+
+Rotating secrets:
+- **DB password**: run `ALTER ROLE chronos_api PASSWORD '<new>';`, then update
+  `ConnectionStrings__PostgreSql` in Vercel and redeploy.
+- **JWT key**: replace `Jwt__SigningKey` and redeploy. Existing tokens stop validating, so users
+  have to log in again.
 
 `GET /api/health` (no auth) returns `{"status":"ok","database":"ok"}` once both secrets are
 right. New deployment URLs sit behind Vercel Authentication (the project default) until a

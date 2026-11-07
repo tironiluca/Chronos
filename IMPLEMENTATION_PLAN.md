@@ -202,13 +202,15 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
     in `__EFMigrationsHistory`), RLS deny-all on every table, API role `chronos_api` owns the
     tables. Its password was deliberately reset to an unknown random value, so the owner must
     set it (`ALTER ROLE chronos_api PASSWORD ...`) before the API can connect.
-  - Vercel: preview build of `c5925ce` is READY in `fra1`. The frontend serves, with SPA deep links
-    working. The API container starts and stops at the intended `Jwt:SigningKey` guard, because
-    the two sensitive env vars (`ConnectionStrings__PostgreSql`, `Jwt__SigningKey`) are left for
-    the owner to set. Secrets were kept out of the agent session on purpose. Only
-    `DatabaseProvider=PostgreSql` is set.
-  - Unverified until the secrets exist: pooler cluster `aws-0` vs `aws-1` (check `/api/health`
-    and the logs), and a full end-to-end run against Supabase.
+  - Vercel: all three env vars are set (`DatabaseProvider` plain; `ConnectionStrings__PostgreSql`
+    and `Jwt__SigningKey` sensitive). On the owner's instruction the agent generated the secrets,
+    so they appear in that session's transcript; rotate them as described in the README if that
+    matters. Live preview: `/api/health` returns `{"status":"ok","database":"ok"}` from `fra1`, so
+    the container starts and the startup migration check runs as `chronos_api` through the
+    **`aws-1`** session pooler. `aws-0` returned "tenant/user not found".
+  - Not run live: the browser smoke. This sandbox's network policy refuses `*.vercel.app` and the
+    Vercel fetch tool is GET-only, so register/login/edit flows were covered by CI's PostgreSql job
+    plus a privilege check on `chronos_api`, not by a request against the deployment.
   - Production = the project's production branch (`main`). Branch pushes create previews,
     which sit behind Vercel Authentication.
 
