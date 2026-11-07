@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { GanttChartComponent } from './gantt-chart.component';
-import { GANTT_RENDERER, IGanttRenderer } from './gantt-renderer';
+import { GANTT_RENDERER, GanttChangeHandlers, IGanttRenderer } from './gantt-renderer';
 import { GanttTaskDto } from '../../core/api/project.model';
 import { makeTask } from '../../testing/fake-project-service';
 
@@ -9,9 +9,11 @@ import { makeTask } from '../../testing/fake-project-service';
 class FakeGanttRenderer implements IGanttRenderer {
   renderedTasks: GanttTaskDto[] | null = null;
   updatedTasks: GanttTaskDto[] | null = null;
+  handlers: GanttChangeHandlers | undefined;
 
-  render(_container: HTMLElement, tasks: GanttTaskDto[]): void {
+  render(_container: HTMLElement, tasks: GanttTaskDto[], handlers?: GanttChangeHandlers): void {
     this.renderedTasks = tasks;
+    this.handlers = handlers;
   }
 
   updateTasks(tasks: GanttTaskDto[]): void {
@@ -61,5 +63,21 @@ describe('GanttChartComponent', () => {
 
     expect(fakeRenderer.renderedTasks).toEqual([task1]);
     expect(fakeRenderer.updatedTasks).toHaveLength(2);
+  });
+
+  it('re-emits chart edits from the renderer as component outputs', () => {
+    const fixture = TestBed.createComponent(GanttChartComponent);
+    fixture.componentRef.setInput('tasks', [task1]);
+    const dateChanges: unknown[] = [];
+    const progressChanges: unknown[] = [];
+    fixture.componentInstance.dateChange.subscribe((e) => dateChanges.push(e));
+    fixture.componentInstance.progressChange.subscribe((e) => progressChanges.push(e));
+    fixture.detectChanges();
+
+    fakeRenderer.handlers!.dateChange('1', '2026-02-02', '2026-02-06');
+    fakeRenderer.handlers!.progressChange('1', 40);
+
+    expect(dateChanges).toEqual([{ taskId: '1', startDate: '2026-02-02', endDate: '2026-02-06' }]);
+    expect(progressChanges).toEqual([{ taskId: '1', progressPercent: 40 }]);
   });
 });

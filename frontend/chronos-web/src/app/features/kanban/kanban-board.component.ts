@@ -44,11 +44,16 @@ import { BoardDetailDto } from '../../core/api/board.model';
 
         <div class="kanban-columns">
           @for (column of board.columns; track column.id) {
-            <div class="kanban-column">
+            <div
+              class="kanban-column"
+              [class.kanban-column-drop]="dropTargetId() === column.id"
+              (dragover)="onDragOver($event, column.id)"
+              (dragleave)="onDragLeave(column.id)"
+              (drop)="onDrop($event, board.id, column.id)">
               <h3>{{ column.name }}</h3>
               <ul class="kanban-cards">
                 @for (card of column.cards; track card.id) {
-                  <li class="kanban-card">
+                  <li class="kanban-card" draggable="true" (dragstart)="onDragStart($event, column.id, card.id)" (dragend)="onDragEnd()">
                     <div class="kanban-card-title">{{ card.title }}</div>
                     @if (card.ganttTaskId && taskNames().get(card.ganttTaskId); as taskName) {
                       <a class="kanban-card-task" [routerLink]="['/projects', board.projectId, 'gantt']">↳ {{ taskName }}</a>
@@ -59,6 +64,18 @@ import { BoardDetailDto } from '../../core/api/board.model';
                         [selectedId]="card.assignedUserId"
                         [ariaLabel]="'Assignee for ' + card.title"
                         (selectionChange)="assign(board.id, column.id, card.id, $event)" />
+                      @if (board.columns.length > 1) {
+                        <select
+                          [attr.aria-label]="'Move ' + card.title"
+                          (change)="moveCard(board.id, column.id, card.id, $any($event.target).value); $any($event.target).value = ''">
+                          <option value="" selected>Move to…</option>
+                          @for (target of board.columns; track target.id) {
+                            @if (target.id !== column.id) {
+                              <option [value]="target.id">{{ target.name }}</option>
+                            }
+                          }
+                        </select>
+                      }
                     </div>
                   </li>
                 } @empty {
@@ -120,6 +137,16 @@ import { BoardDetailDto } from '../../core/api/board.model';
       h3 {
         margin: 0;
       }
+    }
+
+    .kanban-column-drop {
+      border-color: var(--color-primary);
+      border-style: dashed;
+      background: var(--color-primary-bg);
+    }
+
+    .kanban-card[draggable='true'] {
+      cursor: grab;
     }
 
     .kanban-cards {
@@ -221,6 +248,50 @@ export class KanbanBoardComponent {
         this.resource.reload();
       },
       error: (err) => this.actionError.set(err?.error ?? 'Could not create card.')
+    });
+  }
+
+  // Card being dragged (HTML5 DnD). Kept in a signal rather than only in dataTransfer, which
+  // browsers don't let you read during dragover.
+  private readonly dragging = signal<{ columnId: string; cardId: string } | null>(null);
+  protected readonly dropTargetId = signal<string | null>(null);
+
+  onDragStart(event: DragEvent, columnId: string, cardId: string): void {
+    this.dragging.set({ columnId, cardId });
+    event.dataTransfer?.setData('text/plain', cardId);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  onDragOver(event: DragEvent, columnId: string): void {
+    const dragged = this.dragging();
+    if (!dragged || dragged.columnId === columnId) return;
+    event.preventDefault(); // marks the column as a valid drop target
+    this.dropTargetId.set(columnId);
+  }
+
+  onDragLeave(columnId: string): void {
+    if (this.dropTargetId() === columnId) this.dropTargetId.set(null);
+  }
+
+  onDrop(event: DragEvent, boardId: string, columnId: string): void {
+    event.preventDefault();
+    const dragged = this.dragging();
+    this.onDragEnd();
+    if (dragged) this.moveCard(boardId, dragged.columnId, dragged.cardId, columnId);
+  }
+
+  onDragEnd(): void {
+    this.dragging.set(null);
+    this.dropTargetId.set(null);
+  }
+
+  // columnId = the card's current column. Same-column/empty targets are ignored client-side.
+  moveCard(boardId: string, columnId: string, cardId: string, targetColumnId: string): void {
+    if (!targetColumnId || targetColumnId === columnId) return;
+    this.actionError.set(null);
+    this.boardService.moveCard(boardId, columnId, cardId, { targetColumnId }).subscribe({
+      next: () => this.resource.reload(),
+      error: (err) => this.actionError.set(err?.error ?? 'Could not move card.')
     });
   }
 

@@ -3,8 +3,9 @@ import { RouterLink } from '@angular/router';
 import { ProjectService } from '../../core/api/project.service';
 import { BoardService } from '../../core/api/board.service';
 import { UserService } from '../../core/api/user.service';
-import { UserPickerComponent } from '../users/user-picker.component';
-import { GanttChartComponent } from './gantt-chart.component';
+import { GanttChartComponent, GanttDateChange, GanttProgressChange } from './gantt-chart.component';
+import { GanttTaskEditorComponent, TaskDependencyDraft } from './gantt-task-editor.component';
+import { Observable } from 'rxjs';
 
 // Routed at /projects/:projectId/gantt (see app.routes.ts) -- projectId arrives via
 // withComponentInputBinding. Loads the project (GET /api/projects/{id}) and hands its tasks to
@@ -13,7 +14,7 @@ import { GanttChartComponent } from './gantt-chart.component';
 @Component({
   selector: 'chronos-project-gantt-page',
   standalone: true,
-  imports: [GanttChartComponent, RouterLink, UserPickerComponent],
+  imports: [GanttChartComponent, GanttTaskEditorComponent, RouterLink],
   template: `
     <div class="page">
       @if (resource.isLoading()) {
@@ -42,22 +43,27 @@ import { GanttChartComponent } from './gantt-chart.component';
         </section>
 
         @if (project.tasks.length > 0) {
-          <chronos-gantt-chart [tasks]="project.tasks" />
+          <chronos-gantt-chart
+            [tasks]="project.tasks"
+            (dateChange)="onChartDateChange(project.id, $event)"
+            (progressChange)="onChartProgressChange(project.id, $event)" />
+          <p class="empty-state">Drag a bar to reschedule it, or its progress handle to update progress.</p>
 
           <section class="card">
             <h2>Tasks</h2>
             @for (task of project.tasks; track task.id) {
-              <div class="item-row">
-                <div>
-                  <strong>{{ task.name }}</strong>
-                  <span class="empty-state">{{ task.startDate }} → {{ task.endDate }}</span>
-                </div>
-                <chronos-user-picker
-                  [users]="directory.value() ?? []"
-                  [selectedId]="task.assignedUserId"
-                  [ariaLabel]="'Assignee for ' + task.name"
-                  (selectionChange)="assignTask(project.id, task.id, $event)" />
-              </div>
+              <chronos-gantt-task-editor
+                [task]="task"
+                [tasks]="project.tasks"
+                [users]="directory.value() ?? []"
+                (assign)="assignTask(project.id, task.id, $event)"
+                (reschedule)="rescheduleTask(project.id, task.id, $event.startDate, $event.endDate)"
+                (progress)="updateProgress(project.id, task.id, $event)"
+                (addDependency)="addDependency(project.id, task.id, $event)"
+                (removeDependency)="removeDependency(project.id, task.id, $event)" />
+            }
+            @if (editError()) {
+              <p class="error">{{ editError() }}</p>
             }
           </section>
         } @else {
@@ -98,13 +104,47 @@ export class ProjectGanttPageComponent {
   protected readonly taskEnd = signal('');
   protected readonly submitting = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly editError = signal<string | null>(null);
 
   // userId null unassigns. Feeds the resource-availability view (AssignedTasks per user).
   assignTask(projectId: string, taskId: string, userId: string | null): void {
-    this.error.set(null);
-    this.projectService.assignTaskUser(projectId, taskId, { userId }).subscribe({
+    this.mutate(this.projectService.assignTaskUser(projectId, taskId, { userId }), 'Could not assign task.');
+  }
+
+  rescheduleTask(projectId: string, taskId: string, startDate: string, endDate: string): void {
+    this.mutate(this.projectService.rescheduleTask(projectId, taskId, { startDate, endDate }), 'Could not reschedule task.');
+  }
+
+  updateProgress(projectId: string, taskId: string, progressPercent: number): void {
+    this.mutate(this.projectService.updateTaskProgress(projectId, taskId, { progressPercent }), 'Could not update progress.');
+  }
+
+  addDependency(projectId: string, taskId: string, draft: TaskDependencyDraft): void {
+    this.mutate(this.projectService.addTaskDependency(projectId, taskId, draft), 'Could not add dependency.');
+  }
+
+  removeDependency(projectId: string, taskId: string, predecessorTaskId: string): void {
+    this.mutate(this.projectService.removeTaskDependency(projectId, taskId, predecessorTaskId), 'Could not remove dependency.');
+  }
+
+  onChartDateChange(projectId: string, change: GanttDateChange): void {
+    this.rescheduleTask(projectId, change.taskId, change.startDate, change.endDate);
+  }
+
+  onChartProgressChange(projectId: string, change: GanttProgressChange): void {
+    this.updateProgress(projectId, change.taskId, change.progressPercent);
+  }
+
+  // Reloads on failure too: a rejected chart drag must snap the bar back to the server's dates,
+  // since Frappe has already moved it on screen.
+  private mutate(request: Observable<unknown>, fallbackError: string): void {
+    this.editError.set(null);
+    request.subscribe({
       next: () => this.resource.reload(),
-      error: (err) => this.error.set(err?.error ?? 'Could not assign task.')
+      error: (err) => {
+        this.editError.set(typeof err?.error === 'string' ? err.error : fallbackError);
+        this.resource.reload();
+      }
     });
   }
 

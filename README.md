@@ -165,9 +165,25 @@ non-obvious EF Core gotcha this surfaced: adding a task to a `Project` reloaded 
 just constructed) needs its entry explicitly marked `Added`, or EF's change tracker mistakes the
 new owned entity for an existing one and the save fails.
 
+Editing tasks (same scoping, `204`/`400`):
+- `PATCH /api/projects/{id}/tasks/{taskId}/schedule` — `{ "startDate", "endDate" }` (end inclusive, `>=` start).
+- `PATCH /api/projects/{id}/tasks/{taskId}/progress` — `{ "progressPercent": 0..100 }`.
+- `POST /api/projects/{id}/tasks/{taskId}/dependencies` — `{ "predecessorTaskId", "type"?, "lagDays"? }`
+  (`type` = `FinishToStart` (default) / `StartToStart` / `FinishToFinish` / `StartToFinish`,
+  `lagDays` -365..365, negative = lead). Rejected if the predecessor isn't in the same project, is
+  the task itself, is already a predecessor, or the edge would close a cycle (checked by
+  `Project.AddTaskDependency` over the whole task graph).
+- `DELETE /api/projects/{id}/tasks/{taskId}/dependencies/{predecessorTaskId}`.
+
+Dependencies are informational: rescheduling doesn't enforce them server-side.
+
 Frontend: `/projects` (list + create, links to each Gantt page), `/projects/:projectId/gantt`
-(`ProjectGanttPageComponent`: loads the project, adds tasks, assigns them via the same assignee
-picker, renders `GanttChartComponent`, lists linked Kanban boards), and `/project-load` (project × ISO-week grid, one quarter at a time, cell =
+(`ProjectGanttPageComponent`: loads the project, adds tasks, renders `GanttChartComponent`, lists
+linked Kanban boards; one `GanttTaskEditorComponent` per task for assignee, dates, progress and
+dependencies — the predecessor picker hides tasks that would close a cycle). Dragging/resizing a
+bar or its progress handle on the chart saves too (`IGanttRenderer` handlers → chart outputs →
+the same PATCH endpoints); Frappe also drags a bar's dependents, and each moved bar is saved. A
+rejected edit reloads the project so the chart snaps back to the server's dates), and `/project-load` (project × ISO-week grid, one quarter at a time, cell =
 number of tasks overlapping that week, optional project-subset filter; bucketing is client-side
 from `GET /api/projects`).
 
@@ -184,7 +200,10 @@ its columns and cards. `POST /api/boards/{id}/columns` adds a column; `POST
 unvalidated plain cross-reference like `GanttTask.ParentTaskId` — mirroring a Kanban card against
 its originating Gantt task without duplicating schedule data); `PATCH
 /api/boards/{id}/columns/{columnId}/cards/{cardId}/assignee` (body `{ "userId": <guid-or-null> }`)
-assigns/unassigns a card, same pattern as task assignment. No extra authorization policy beyond
+assigns/unassigns a card, same pattern as task assignment; `PATCH
+/api/boards/{id}/columns/{columnId}/cards/{cardId}/column` (body `{ "targetColumnId": <guid> }`)
+moves a card to another column of the same board (appended — cards have no in-column order yet),
+via `Board.MoveCard`. No extra authorization policy beyond
 authentication, same as Project/GanttTask. `BoardRepository.TrackNewColumn`/`TrackNewCard` apply
 the same explicit-`Added`-marking fix as `ProjectRepository.TrackNewTask`, needed at both owned
 levels here.
@@ -194,7 +213,8 @@ an assignee picker over `GET /api/users/directory` (any org member; id/display n
 email/role lookup via `GET /api/users?email=` stays `AdminOnly`). A board can be linked
 to a project when created; a linked board links to that project's Gantt page, and new cards on it
 can be linked to one of the project's tasks (shown on the card). `/boards?boardId=<id>` preselects
-a board — the Gantt page's "Linked Kanban boards" list uses it.
+a board — the Gantt page's "Linked Kanban boards" list uses it. Cards move between columns by
+drag-and-drop (native HTML5) or a "Move to…" select on each card (keyboard-accessible).
 
 ## Leave (ferie) workflow
 

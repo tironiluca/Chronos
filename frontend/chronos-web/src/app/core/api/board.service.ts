@@ -6,7 +6,8 @@ import {
   BoardDto,
   CreateBoardPayload,
   CreateKanbanCardPayload,
-  CreateKanbanColumnPayload
+  CreateKanbanColumnPayload,
+  MoveKanbanCardPayload
 } from './board.model';
 
 @Injectable({ providedIn: 'root' })
@@ -41,5 +42,10 @@ export class BoardService {
 
   assignCardUser(boardId: string, columnId: string, cardId: string, payload: AssignKanbanCardUserPayload) {
     return this.http.patch<void>(`/api/boards/${boardId}/columns/${columnId}/cards/${cardId}/assignee`, payload);
+  }
+
+  // columnId = the card's current column. Target must be another column of the same board.
+  moveCard(boardId: string, columnId: string, cardId: string, payload: MoveKanbanCardPayload) {
+    return this.http.patch<void>(`/api/boards/${boardId}/columns/${columnId}/cards/${cardId}/column`, payload);
   }
 }
