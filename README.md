@@ -280,6 +280,51 @@ the same repository round trips as the Sqlite-backed tests elsewhere in that pro
 against a real SQL Server / PostgreSQL container via Testcontainers, to prove the multi-DB
 abstraction actually holds on those engines and not only on Sqlite.
 
+## Deployment (Vercel + Supabase)
+
+One Vercel project (`chronos`, framework **Services**) serves both halves from one origin, per
+the root `vercel.json`:
+
+- `web`: the Angular app (`frontend/chronos-web/`, Angular preset, static).
+- `api`: the ASP.NET Core API as a **container** (`src/Dockerfile`). Vercel uses the Dockerfile's
+  own directory as the build context, which is why it sits in `src/` and not in `Chronos.Api/`. It binds `$PORT` and defaults to `ASPNETCORE_ENVIRONMENT=Production` and
+  `DatabaseProvider=PostgreSql`.
+- Rewrites: `/api/*` → `api`, everything else → `web`. Same origin, so CORS isn't involved.
+- `regions: ["fra1"]` keeps the API next to the database.
+
+Database: Supabase project `chronos` (eu-central-1). The schema was created from this repo's
+PostgreSql EF migrations (`dotnet ef migrations script --idempotent --context
+PostgreSqlChronosDbContext`), which also filled `__EFMigrationsHistory`, so the API's startup
+`Migrate()` only applies migrations added later.
+
+- The API connects as a dedicated **`chronos_api`** login role that owns the Chronos tables and
+  has `CREATE` on `public` (for future migrations). It is not `postgres`, not a superuser, and
+  has no `BYPASSRLS`.
+- **RLS is enabled with no policies on every table.** Supabase exposes `public` through its REST
+  API (PostgREST) to the `anon`/`authenticated` roles; deny-all keeps that closed. The API is
+  unaffected because table owners skip RLS. The advisor's "RLS enabled, no policy" INFO is
+  expected. Don't add policies unless you want PostgREST access.
+- Connect through the **Supavisor session pooler** (port 5432). The direct `db.<ref>` host is
+  IPv6-only, and EF's migration locking is unreliable under transaction-mode pooling (6543).
+
+Environment variables (Vercel → Project → Settings → Environment Variables, Production + Preview):
+
+| Key | Value | Type |
+| --- | --- | --- |
+| `DatabaseProvider` | `PostgreSql` | plain (already set) |
+| `ConnectionStrings__PostgreSql` | `Host=aws-0-eu-central-1.pooler.supabase.com;Port=5432;Database=postgres;Username=chronos_api.<project-ref>;Password=<password>;SSL Mode=Require;Maximum Pool Size=5;Timeout=15` | sensitive |
+| `Jwt__SigningKey` | ≥ 64 random characters, e.g. `openssl rand -base64 64` | sensitive |
+
+Set the `chronos_api` password yourself in the Supabase SQL editor (`ALTER ROLE chronos_api
+PASSWORD '<password>';`) and paste the same value into the connection string. If
+`/api/health` reports the database unreachable and the logs say "tenant or user not found",
+the project is on the other pooler cluster: change `aws-0` to `aws-1`.
+
+`GET /api/health` (no auth) returns `{"status":"ok","database":"ok"}` once both secrets are
+right. New deployment URLs sit behind Vercel Authentication (the project default) until a
+custom domain or a protection change makes them public. Before that, read the open-registration
+item under Known issues in `IMPLEMENTATION_PLAN.md`.
+
 ## CI
 
 `.github/workflows/ci.yml` runs a `backend` job as a 3-way matrix (Sqlite, SqlServer, PostgreSql):

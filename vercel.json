@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": [
+    "fra1"
+  ],
   "services": {
     "web": {
       "root": "frontend/chronos-web/",
@@ -8,11 +11,21 @@
     "api": {
       "root": "src/",
       "runtime": "container",
-      "entrypoint": "Chronos.Api/Dockerfile"
+      "entrypoint": "Dockerfile"
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": { "service": "api" } },
-    { "source": "/(.*)", "destination": { "service": "web" } }
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
   ]
 }

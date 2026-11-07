@@ -1,5 +1,6 @@
-# Build context is src/ (see vercel.json "services.api"), so only the four production projects are
-# sent to the builder -- tests and the frontend stay out of the image.
+# Lives in src/ because Vercel (like `docker build .` here) uses the Dockerfile's own directory as the
+# build context: src/ holds exactly the four production projects, so tests and the frontend stay out
+# of the image. Local build: `docker build -t chronos-api src/`.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
