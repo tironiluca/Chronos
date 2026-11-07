@@ -32,6 +32,7 @@ function createFakeBoardService(boardValue: BoardDetailDto = board) {
     createColumn: jest.fn().mockReturnValue(of('col-2')),
     createCard: jest.fn().mockReturnValue(of('card-2')),
     assignCardUser: jest.fn().mockReturnValue(of(undefined)),
+    moveCard: jest.fn().mockReturnValue(of(undefined)),
     reloadSpy: reload
   };
 }
@@ -157,5 +158,87 @@ describe('KanbanBoardComponent', () => {
     fixture.componentInstance.onCreateCard(new Event('submit'), 'board-1', 'col-1');
 
     expect(fakeBoardService.createCard).toHaveBeenCalledWith('board-1', 'col-1', { title: 'Loose card', ganttTaskId: null });
+  });
+
+  describe('moving cards', () => {
+    const twoColumnBoard: BoardDetailDto = {
+      ...board,
+      columns: [...board.columns, { id: 'col-2', boardId: 'board-1', name: 'Done', order: 1, cards: [] }]
+    };
+
+    function dragEvent(type: string): DragEvent {
+      const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent;
+      Object.defineProperty(event, 'dataTransfer', { value: { setData: jest.fn(), effectAllowed: 'none' } });
+      return event;
+    }
+
+    it('offers only the other columns as move targets', () => {
+      const fixture = setup(createFakeBoardService(twoColumnBoard));
+
+      const select: HTMLSelectElement = fixture.nativeElement.querySelector('select[aria-label="Move Task A"]');
+      expect(Array.from(select.options).map((o) => o.textContent?.trim())).toEqual(['Move to…', 'Done']);
+    });
+
+    it('hides the move picker on a single-column board', () => {
+      const fixture = setup(createFakeBoardService());
+
+      expect(fixture.nativeElement.querySelector('select[aria-label="Move Task A"]')).toBeNull();
+    });
+
+    it('moves a card picked from the select and reloads', () => {
+      const fakeBoardService = createFakeBoardService(twoColumnBoard);
+      const fixture = setup(fakeBoardService);
+      const select: HTMLSelectElement = fixture.nativeElement.querySelector('select[aria-label="Move Task A"]');
+
+      select.value = 'col-2';
+      select.dispatchEvent(new Event('change'));
+
+      expect(fakeBoardService.moveCard).toHaveBeenCalledWith('board-1', 'col-1', 'card-1', { targetColumnId: 'col-2' });
+      expect(fakeBoardService.reloadSpy).toHaveBeenCalled();
+      expect(select.value).toBe('');
+    });
+
+    it('moves a card dropped onto another column', () => {
+      const fakeBoardService = createFakeBoardService(twoColumnBoard);
+      const fixture = setup(fakeBoardService);
+      const element: HTMLElement = fixture.nativeElement;
+      const [, doneColumn] = Array.from(element.querySelectorAll<HTMLElement>('.kanban-column'));
+
+      element.querySelector('.kanban-card')!.dispatchEvent(dragEvent('dragstart'));
+      const over = dragEvent('dragover');
+      doneColumn.dispatchEvent(over);
+      fixture.detectChanges();
+      expect(over.defaultPrevented).toBe(true);
+      expect(doneColumn.classList).toContain('kanban-column-drop');
+
+      doneColumn.dispatchEvent(dragEvent('drop'));
+
+      expect(fakeBoardService.moveCard).toHaveBeenCalledWith('board-1', 'col-1', 'card-1', { targetColumnId: 'col-2' });
+    });
+
+    it('does not accept a drop back onto the card\'s own column', () => {
+      const fakeBoardService = createFakeBoardService(twoColumnBoard);
+      const fixture = setup(fakeBoardService);
+      const element: HTMLElement = fixture.nativeElement;
+      const [todoColumn] = Array.from(element.querySelectorAll<HTMLElement>('.kanban-column'));
+
+      element.querySelector('.kanban-card')!.dispatchEvent(dragEvent('dragstart'));
+      const over = dragEvent('dragover');
+      todoColumn.dispatchEvent(over);
+      todoColumn.dispatchEvent(dragEvent('drop'));
+
+      expect(over.defaultPrevented).toBe(false);
+      expect(fakeBoardService.moveCard).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the server error when a move fails', () => {
+      const fakeBoardService = createFakeBoardService(twoColumnBoard);
+      fakeBoardService.moveCard.mockReturnValue(throwError(() => ({ error: "Column 'x' was not found." })));
+      const fixture = setup(fakeBoardService);
+
+      fixture.componentInstance.moveCard('board-1', 'col-1', 'card-1', 'col-2');
+
+      expect(fixture.componentInstance['actionError']()).toBe("Column 'x' was not found.");
+    });
   });
 });

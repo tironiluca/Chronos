@@ -89,6 +89,41 @@ public class BoardRepositoryTests : IDisposable
         reloadedAgain!.Columns.Single().Cards.Should().ContainSingle(c => c.Title == "Install PLC");
     }
 
+    // Moving a card re-parents an owned entity (KanbanCard is OwnsMany'd under KanbanColumn).
+    // Asserted through a fresh DbContext: the test's own context would hand back the same tracked
+    // instances (identity resolution) and mask a write that never reached the database.
+    [Fact]
+    public async Task MoveCard_OnReloadedBoard_ThenSaveChanges_PersistsNewColumnAndKeepsCardIdentity()
+    {
+        var repository = new BoardRepository(_context);
+        var board = new Board(Guid.NewGuid(), "Line 3 Kanban");
+        var todo = board.AddColumn("To Do", 0);
+        var done = board.AddColumn("Done", 1);
+        var card = todo.AddCard("Install PLC");
+        card.AssignUser(Guid.NewGuid());
+        await repository.AddAsync(board);
+        await repository.SaveChangesAsync();
+
+        using (var moveContext = NewContext())
+        {
+            var moveRepository = new BoardRepository(moveContext);
+            var reloaded = await moveRepository.GetByIdAsync(board.Id);
+            reloaded!.MoveCard(card.Id, todo.Id, done.Id);
+            await moveRepository.SaveChangesAsync();
+        }
+
+        using var verifyContext = NewContext();
+        var persisted = await new BoardRepository(verifyContext).GetByIdAsync(board.Id);
+        persisted!.Columns.Single(c => c.Id == todo.Id).Cards.Should().BeEmpty();
+        var moved = persisted.Columns.Single(c => c.Id == done.Id).Cards.Should().ContainSingle().Subject;
+        moved.Id.Should().Be(card.Id);
+        moved.ColumnId.Should().Be(done.Id);
+        moved.AssignedUserId.Should().Be(card.AssignedUserId);
+    }
+
+    private ChronosDbContext NewContext() =>
+        new(new DbContextOptionsBuilder<ChronosDbContext>().UseSqlite(_connection).Options);
+
     // Regression coverage for the resource-availability query (see IMPLEMENTATION_PLAN.md), which
     // needs every board's columns/cards loaded across a whole organization in one call.
     [Fact]

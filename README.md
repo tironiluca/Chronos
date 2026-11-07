@@ -165,9 +165,25 @@ non-obvious EF Core gotcha this surfaced: adding a task to a `Project` reloaded 
 just constructed) needs its entry explicitly marked `Added`, or EF's change tracker mistakes the
 new owned entity for an existing one and the save fails.
 
+Editing tasks (same scoping, `204`/`400`):
+- `PATCH /api/projects/{id}/tasks/{taskId}/schedule` — `{ "startDate", "endDate" }` (end inclusive, `>=` start).
+- `PATCH /api/projects/{id}/tasks/{taskId}/progress` — `{ "progressPercent": 0..100 }`.
+- `POST /api/projects/{id}/tasks/{taskId}/dependencies` — `{ "predecessorTaskId", "type"?, "lagDays"? }`
+  (`type` = `FinishToStart` (default) / `StartToStart` / `FinishToFinish` / `StartToFinish`,
+  `lagDays` -365..365, negative = lead). Rejected if the predecessor isn't in the same project, is
+  the task itself, is already a predecessor, or the edge would close a cycle (checked by
+  `Project.AddTaskDependency` over the whole task graph).
+- `DELETE /api/projects/{id}/tasks/{taskId}/dependencies/{predecessorTaskId}`.
+
+Dependencies are informational: rescheduling doesn't enforce them server-side.
+
 Frontend: `/projects` (list + create, links to each Gantt page), `/projects/:projectId/gantt`
-(`ProjectGanttPageComponent`: loads the project, adds tasks, assigns them via the same assignee
-picker, renders `GanttChartComponent`, lists linked Kanban boards), and `/project-load` (project × ISO-week grid, one quarter at a time, cell =
+(`ProjectGanttPageComponent`: loads the project, adds tasks, renders `GanttChartComponent`, lists
+linked Kanban boards; one `GanttTaskEditorComponent` per task for assignee, dates, progress and
+dependencies — the predecessor picker hides tasks that would close a cycle). Dragging/resizing a
+bar or its progress handle on the chart saves too (`IGanttRenderer` handlers → chart outputs →
+the same PATCH endpoints); Frappe also drags a bar's dependents, and each moved bar is saved. A
+rejected edit reloads the project so the chart snaps back to the server's dates), and `/project-load` (project × ISO-week grid, one quarter at a time, cell =
 number of tasks overlapping that week, optional project-subset filter; bucketing is client-side
 from `GET /api/projects`).
 
@@ -184,7 +200,10 @@ its columns and cards. `POST /api/boards/{id}/columns` adds a column; `POST
 unvalidated plain cross-reference like `GanttTask.ParentTaskId` — mirroring a Kanban card against
 its originating Gantt task without duplicating schedule data); `PATCH
 /api/boards/{id}/columns/{columnId}/cards/{cardId}/assignee` (body `{ "userId": <guid-or-null> }`)
-assigns/unassigns a card, same pattern as task assignment. No extra authorization policy beyond
+assigns/unassigns a card, same pattern as task assignment; `PATCH
+/api/boards/{id}/columns/{columnId}/cards/{cardId}/column` (body `{ "targetColumnId": <guid> }`)
+moves a card to another column of the same board (appended — cards have no in-column order yet),
+via `Board.MoveCard`. No extra authorization policy beyond
 authentication, same as Project/GanttTask. `BoardRepository.TrackNewColumn`/`TrackNewCard` apply
 the same explicit-`Added`-marking fix as `ProjectRepository.TrackNewTask`, needed at both owned
 levels here.
@@ -194,7 +213,8 @@ an assignee picker over `GET /api/users/directory` (any org member; id/display n
 email/role lookup via `GET /api/users?email=` stays `AdminOnly`). A board can be linked
 to a project when created; a linked board links to that project's Gantt page, and new cards on it
 can be linked to one of the project's tasks (shown on the card). `/boards?boardId=<id>` preselects
-a board — the Gantt page's "Linked Kanban boards" list uses it.
+a board — the Gantt page's "Linked Kanban boards" list uses it. Cards move between columns by
+drag-and-drop (native HTML5) or a "Move to…" select on each card (keyboard-accessible).
 
 ## Leave (ferie) workflow
 
@@ -259,6 +279,51 @@ cd frontend/chronos-web && npm test
 the same repository round trips as the Sqlite-backed tests elsewhere in that project, but run
 against a real SQL Server / PostgreSQL container via Testcontainers, to prove the multi-DB
 abstraction actually holds on those engines and not only on Sqlite.
+
+## Deployment (Vercel + Supabase)
+
+One Vercel project (`chronos`, framework **Services**) serves both halves from one origin, per
+the root `vercel.json`:
+
+- `web`: the Angular app (`frontend/chronos-web/`, Angular preset, static).
+- `api`: the ASP.NET Core API as a **container** (`src/Dockerfile`). Vercel uses the Dockerfile's
+  own directory as the build context, which is why it sits in `src/` and not in `Chronos.Api/`. It binds `$PORT` and defaults to `ASPNETCORE_ENVIRONMENT=Production` and
+  `DatabaseProvider=PostgreSql`.
+- Rewrites: `/api/*` → `api`, everything else → `web`. Same origin, so CORS isn't involved.
+- `regions: ["fra1"]` keeps the API next to the database.
+
+Database: Supabase project `chronos` (eu-central-1). The schema was created from this repo's
+PostgreSql EF migrations (`dotnet ef migrations script --idempotent --context
+PostgreSqlChronosDbContext`), which also filled `__EFMigrationsHistory`, so the API's startup
+`Migrate()` only applies migrations added later.
+
+- The API connects as a dedicated **`chronos_api`** login role that owns the Chronos tables and
+  has `CREATE` on `public` (for future migrations). It is not `postgres`, not a superuser, and
+  has no `BYPASSRLS`.
+- **RLS is enabled with no policies on every table.** Supabase exposes `public` through its REST
+  API (PostgREST) to the `anon`/`authenticated` roles; deny-all keeps that closed. The API is
+  unaffected because table owners skip RLS. The advisor's "RLS enabled, no policy" INFO is
+  expected. Don't add policies unless you want PostgREST access.
+- Connect through the **Supavisor session pooler** (port 5432). The direct `db.<ref>` host is
+  IPv6-only, and EF's migration locking is unreliable under transaction-mode pooling (6543).
+
+Environment variables (Vercel → Project → Settings → Environment Variables, Production + Preview):
+
+| Key | Value | Type |
+| --- | --- | --- |
+| `DatabaseProvider` | `PostgreSql` | plain (already set) |
+| `ConnectionStrings__PostgreSql` | `Host=aws-0-eu-central-1.pooler.supabase.com;Port=5432;Database=postgres;Username=chronos_api.<project-ref>;Password=<password>;SSL Mode=Require;Maximum Pool Size=5;Timeout=15` | sensitive |
+| `Jwt__SigningKey` | ≥ 64 random characters, e.g. `openssl rand -base64 64` | sensitive |
+
+Set the `chronos_api` password yourself in the Supabase SQL editor (`ALTER ROLE chronos_api
+PASSWORD '<password>';`) and paste the same value into the connection string. If
+`/api/health` reports the database unreachable and the logs say "tenant or user not found",
+the project is on the other pooler cluster: change `aws-0` to `aws-1`.
+
+`GET /api/health` (no auth) returns `{"status":"ok","database":"ok"}` once both secrets are
+right. New deployment URLs sit behind Vercel Authentication (the project default) until a
+custom domain or a protection change makes them public. Before that, read the open-registration
+item under Known issues in `IMPLEMENTATION_PLAN.md`.
 
 ## CI
 

@@ -49,3 +49,7 @@ export interface CreateKanbanCardPayload {
 export interface AssignKanbanCardUserPayload {
   userId: string | null;
 }
+
+export interface MoveKanbanCardPayload {
+  targetColumnId: string;
+}

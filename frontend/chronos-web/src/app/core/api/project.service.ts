@@ -1,6 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, httpResource } from '@angular/common/http';
-import { AssignGanttTaskUserPayload, CreateGanttTaskPayload, CreateProjectPayload, ProjectDto } from './project.model';
+import {
+  AddGanttTaskDependencyPayload,
+  AssignGanttTaskUserPayload,
+  CreateGanttTaskPayload,
+  CreateProjectPayload,
+  ProjectDto,
+  RescheduleGanttTaskPayload,
+  UpdateGanttTaskProgressPayload
+} from './project.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
@@ -32,5 +40,22 @@ export class ProjectService {
 
   assignTaskUser(projectId: string, taskId: string, payload: AssignGanttTaskUserPayload) {
     return this.http.patch<void>(`/api/projects/${projectId}/tasks/${taskId}/assignee`, payload);
+  }
+
+  rescheduleTask(projectId: string, taskId: string, payload: RescheduleGanttTaskPayload) {
+    return this.http.patch<void>(`/api/projects/${projectId}/tasks/${taskId}/schedule`, payload);
+  }
+
+  updateTaskProgress(projectId: string, taskId: string, payload: UpdateGanttTaskProgressPayload) {
+    return this.http.patch<void>(`/api/projects/${projectId}/tasks/${taskId}/progress`, payload);
+  }
+
+  // The server rejects predecessors outside the project and edges that would close a cycle.
+  addTaskDependency(projectId: string, taskId: string, payload: AddGanttTaskDependencyPayload) {
+    return this.http.post<string>(`/api/projects/${projectId}/tasks/${taskId}/dependencies`, payload);
+  }
+
+  removeTaskDependency(projectId: string, taskId: string, predecessorTaskId: string) {
+    return this.http.delete<void>(`/api/projects/${projectId}/tasks/${taskId}/dependencies/${predecessorTaskId}`);
   }
 }

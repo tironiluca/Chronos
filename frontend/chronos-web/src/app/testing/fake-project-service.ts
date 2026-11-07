@@ -53,6 +53,10 @@ export function createFakeProjectService(projects: ProjectDto[] = []) {
     create: jest.fn().mockReturnValue(of('project-new')),
     createTask: jest.fn().mockReturnValue(of('task-new')),
     assignTaskUser: jest.fn().mockReturnValue(of(undefined)),
+    rescheduleTask: jest.fn().mockReturnValue(of(undefined)),
+    updateTaskProgress: jest.fn().mockReturnValue(of(undefined)),
+    addTaskDependency: jest.fn().mockReturnValue(of('dep-new')),
+    removeTaskDependency: jest.fn().mockReturnValue(of(undefined)),
     projectsReload,
     projectReload,
     requestedIds
