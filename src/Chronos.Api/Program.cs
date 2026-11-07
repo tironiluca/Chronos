@@ -101,6 +101,13 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Unauthenticated liveness + DB reachability probe for the hosting platform and smoke checks.
+// Reports only up/down, never connection details.
+app.MapGet("/api/health", async (Chronos.Infrastructure.Persistence.ChronosDbContext db, CancellationToken ct) =>
+    await db.Database.CanConnectAsync(ct)
+        ? Results.Ok(new { status = "ok", database = "ok" })
+        : Results.Json(new { status = "degraded", database = "unreachable" }, statusCode: StatusCodes.Status503ServiceUnavailable));
+
 app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();
 app.MapDepartmentEndpoints();
