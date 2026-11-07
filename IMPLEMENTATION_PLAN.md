@@ -195,6 +195,23 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
   check-runs API) — first real proof the cross-aggregate availability query works against real
   SqlServer/PostgreSql, not just Sqlite.
 
+- **Deployment (2026-11-07)**: Vercel project `chronos` (team "Luca's projects", framework
+  Services, git-linked to this repo) + Supabase project `chronos` (`dyrpcketvphbkyycxezu`,
+  eu-central-1, free plan). README's "Deployment" section has the layout and the env var table.
+  - Supabase: schema applied from the PostgreSql EF idempotent script (all 5 migrations recorded
+    in `__EFMigrationsHistory`), RLS deny-all on every table, API role `chronos_api` owns the
+    tables. Its password was deliberately reset to an unknown random value, so the owner must
+    set it (`ALTER ROLE chronos_api PASSWORD ...`) before the API can connect.
+  - Vercel: preview build of `c5925ce` is READY in `fra1`. The frontend serves, with SPA deep links
+    working. The API container starts and stops at the intended `Jwt:SigningKey` guard, because
+    the two sensitive env vars (`ConnectionStrings__PostgreSql`, `Jwt__SigningKey`) are left for
+    the owner to set. Secrets were kept out of the agent session on purpose. Only
+    `DatabaseProvider=PostgreSql` is set.
+  - Unverified until the secrets exist: pooler cluster `aws-0` vs `aws-1` (check `/api/health`
+    and the logs), and a full end-to-end run against Supabase.
+  - Production = the project's production branch (`main`). Branch pushes create previews,
+    which sit behind Vercel Authentication.
+
 ### Gotchas learned the hard way (still true, worth not re-discovering)
 
 - `AddValidatorsFromAssembly` needs `using FluentValidation;` — the package reference alone doesn't
@@ -236,6 +253,14 @@ Multiple Claude sessions work this tree concurrently — if this file disagrees 
 - Playwright vs this UI: the sticky top nav covers elements that `scrollIntoViewIfNeeded` scrolled
   to the top edge (scroll to top before pointer drags), and a Kanban card's centre is one of its
   `<select>`s, so drag it by `.kanban-card-title`. Boards start with three default columns.
+
+- Vercel container services build with **the Dockerfile's own directory** as context, not the
+  service `root`, hence `src/Dockerfile`. Locally, `docker build` in this sandbox needs the agent
+  proxy CA added to the SDK stage (a throwaway Dockerfile variant, never committed). Vercel's
+  builders don't need it.
+- Supabase exposes `public` via PostgREST: any table created there without RLS is readable with
+  the anon key. New EF migrations that add tables must be followed by `ALTER TABLE ... ENABLE ROW
+  LEVEL SECURITY` (and owned by `chronos_api`). The advisor flags misses as `rls_disabled_in_public`.
 
 ## Known issues (still open)
 
@@ -281,5 +306,6 @@ Design decisions kept here because they still constrain future changes:
    "who can see whose stuff" mechanisms.
 5. Refresh-token flow on the frontend.
 6. Decide on invite/verification gating for org + user self-registration before this goes beyond
-   local dev.
+   local dev. **Now more pressing**: the app is deployed (behind Vercel Authentication for now).
+   Making it public without gating lets anyone create orgs/users.
 7. E2E in CI — the Playwright smoke flow from this pass is a ready-made first scenario.
