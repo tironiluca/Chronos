@@ -48,9 +48,11 @@ export function frappeEndToIsoDate(end: Date): string {
 @Injectable()
 export class FrappeGanttRenderer implements IGanttRenderer {
   private instance: FrappeGanttInstance | null = null;
+  private container: HTMLElement | null = null;
 
   render(container: HTMLElement, tasks: GanttTaskDto[], handlers?: GanttChangeHandlers): void {
     const Gantt = frappeGantt();
+    this.container = container;
     this.instance = new Gantt(container, this.toFrappeTasks(tasks), {
       view_mode: 'Week',
       date_format: 'YYYY-MM-DD',
@@ -60,14 +62,25 @@ export class FrappeGanttRenderer implements IGanttRenderer {
       on_progress_change: (task: { id: string }, progress: number) =>
         handlers?.progressChange(task.id, Math.max(0, Math.min(100, Math.round(progress))))
     });
+    this.fitHeight();
   }
 
   updateTasks(tasks: GanttTaskDto[]): void {
     this.instance?.refresh(this.toFrappeTasks(tasks));
+    this.fitHeight();
+  }
+
+  // Frappe 0.6 sizes its SVG at grid height + 100px (room for its popup), which leaves a large
+  // empty band under the last bar. Trim the SVG to the grid it actually drew.
+  private fitHeight(): void {
+    const svg = this.container?.querySelector<SVGSVGElement>('svg.gantt');
+    const gridHeight = svg?.querySelector('.grid-background')?.getAttribute('height');
+    if (svg && gridHeight) svg.setAttribute('height', gridHeight);
   }
 
   destroy(): void {
     this.instance = null;
+    this.container = null;
   }
 
   private toFrappeTasks(tasks: GanttTaskDto[]) {

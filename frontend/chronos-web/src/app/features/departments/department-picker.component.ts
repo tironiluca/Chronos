@@ -2,16 +2,17 @@ import { Component, computed, inject, input, output } from '@angular/core';
 import { DepartmentService } from '../../core/api/department.service';
 import { DepartmentDto } from '../../core/api/department.model';
 
-interface DepartmentOption {
+export interface DepartmentOption {
   id: string;
   name: string;
+  code: string;
   depth: number;
 }
 
 // Flattens the department tree (parentDepartmentId) into a depth-first, indentation-ready list
 // for a plain <select> -- reused wherever a department needs picking (department management's
 // "parent department" field, the resource-availability calendar's department filter).
-function flattenTree(departments: DepartmentDto[]): DepartmentOption[] {
+export function flattenTree(departments: DepartmentDto[]): DepartmentOption[] {
   const byParent = new Map<string | null, DepartmentDto[]>();
   for (const department of departments) {
     const siblings = byParent.get(department.parentDepartmentId) ?? [];
@@ -22,7 +23,7 @@ function flattenTree(departments: DepartmentDto[]): DepartmentOption[] {
   const options: DepartmentOption[] = [];
   const visit = (parentId: string | null, depth: number) => {
     for (const department of byParent.get(parentId) ?? []) {
-      options.push({ id: department.id, name: department.name, depth });
+      options.push({ id: department.id, name: department.name, code: department.code, depth });
       visit(department.id, depth + 1);
     }
   };
@@ -49,6 +50,18 @@ function flattenTree(departments: DepartmentDto[]): DepartmentOption[] {
     }
     @if (resource.error()) {
       <span class="error">Could not load departments.</span>
+    }
+  `,
+  styles: `
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    select {
+      width: 100%;
     }
   `
 })

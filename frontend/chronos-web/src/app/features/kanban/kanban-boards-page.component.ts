@@ -1,4 +1,5 @@
-import { Component, inject, input, linkedSignal, signal } from '@angular/core';
+import { IconComponent } from '../../shared/ui/icon.component';
+import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { BoardService } from '../../core/api/board.service';
 import { KanbanBoardComponent } from './kanban-board.component';
 import { ProjectPickerComponent } from '../projects/project-picker.component';
@@ -10,33 +11,51 @@ import { ProjectPickerComponent } from '../projects/project-picker.component';
 @Component({
   selector: 'chronos-kanban-boards-page',
   standalone: true,
-  imports: [KanbanBoardComponent, ProjectPickerComponent],
+  imports: [IconComponent, KanbanBoardComponent, ProjectPickerComponent],
   template: `
     <div class="page">
       <header class="page-header">
-        <h1>Kanban boards</h1>
+        <div>
+          <h1>Boards</h1>
+          <p class="page-subtitle">Kanban boards, optionally linked to a project's Gantt tasks.</p>
+        </div>
+        <div class="page-actions">
+          <button type="button" class="btn-primary" [attr.aria-expanded]="formVisible()" (click)="showForm.set(!showForm())">
+            <chronos-icon [name]="formVisible() ? 'close' : 'plus'" [size]="17" /> New board
+          </button>
+        </div>
       </header>
 
-      <form class="toolbar" (submit)="onCreateBoard($event)">
-        <input
-          type="text"
-          placeholder="New board name"
-          [value]="newBoardName()"
-          (input)="newBoardName.set($any($event.target).value)" />
-        <chronos-project-picker
-          [selectedId]="newBoardProjectId()"
-          allOptionLabel="No linked project"
-          (selectionChange)="newBoardProjectId.set($event)" />
-        <button type="submit" [disabled]="submitting()">Create board</button>
-        @if (error()) {
-          <p class="error">{{ error() }}</p>
-        }
-      </form>
-
-      @if (resource.isLoading()) {
-        <p class="empty-state">Loading boards...</p>
+      @if (formVisible()) {
+      <section class="card">
+        <form class="form-grid" (submit)="onCreateBoard($event)">
+          <label>
+            Board name
+            <input
+              type="text"
+              placeholder="Sprint 12"
+              [value]="newBoardName()"
+              (input)="newBoardName.set($any($event.target).value)" />
+          </label>
+          <label>
+            Linked project
+            <chronos-project-picker
+              [selectedId]="newBoardProjectId()"
+              allOptionLabel="No linked project"
+              (selectionChange)="newBoardProjectId.set($event)" />
+          </label>
+          <button type="submit" [disabled]="submitting()"><chronos-icon name="plus" [size]="17" /> Create board</button>
+          @if (error()) {
+            <p class="error">{{ error() }}</p>
+          }
+        </form>
+      </section>
       }
-      <ul class="chips">
+
+      @if (resource.isLoading() && !resource.value()) {
+        <p class="empty-state">Loading boards…</p>
+      }
+      <ul class="chips" aria-label="Boards">
         @for (board of resource.value(); track board.id) {
           <li>
             <button
@@ -48,7 +67,13 @@ import { ProjectPickerComponent } from '../projects/project-picker.component';
             </button>
           </li>
         } @empty {
-          <li class="empty-state">No boards yet — create one above.</li>
+          @if (!resource.isLoading()) {
+            <li class="card empty no-boards">
+              <span class="empty-icon"><chronos-icon name="boards" /></span>
+              <strong>No boards yet</strong>
+              <p>Create one above. It starts with To Do, In Progress and Done columns.</p>
+            </li>
+          }
         }
       </ul>
 
@@ -57,6 +82,22 @@ import { ProjectPickerComponent } from '../projects/project-picker.component';
       }
     </div>
   `,
+  styles: `
+    chronos-project-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-weight: 400;
+    }
+
+    .no-boards {
+      width: 100%;
+    }
+
+    chronos-kanban-board {
+      display: block;
+    }
+  `
 })
 export class KanbanBoardsPageComponent {
   private readonly boardService = inject(BoardService);
@@ -70,6 +111,11 @@ export class KanbanBoardsPageComponent {
   protected readonly newBoardProjectId = signal<string | null>(null);
   protected readonly submitting = signal(false);
   protected readonly error = signal<string | null>(null);
+  // Same pattern as the projects page: the form hides behind "New board" once boards exist.
+  protected readonly showForm = signal(false);
+  protected readonly formVisible = computed(
+    () => this.showForm() || (!this.resource.isLoading() && (this.resource.value() ?? []).length === 0)
+  );
 
   onCreateBoard(event: Event): void {
     event.preventDefault();
@@ -84,6 +130,7 @@ export class KanbanBoardsPageComponent {
         this.submitting.set(false);
         this.newBoardName.set('');
         this.newBoardProjectId.set(null);
+        this.showForm.set(false);
         this.resource.reload();
         this.selectedBoardId.set(id);
       },

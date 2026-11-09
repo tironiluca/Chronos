@@ -1,5 +1,7 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { IconComponent } from '../../shared/ui/icon.component';
+import { formatDate } from '../../shared/format';
 import { ProjectService } from '../../core/api/project.service';
 import { BoardService } from '../../core/api/board.service';
 import { UserService } from '../../core/api/user.service';
@@ -14,43 +16,63 @@ import { Observable } from 'rxjs';
 @Component({
   selector: 'chronos-project-gantt-page',
   standalone: true,
-  imports: [GanttChartComponent, GanttTaskEditorComponent, RouterLink],
+  imports: [GanttChartComponent, GanttTaskEditorComponent, RouterLink, IconComponent],
   template: `
     <div class="page">
-      @if (resource.isLoading()) {
-        <p class="empty-state">Loading project...</p>
+      @if (resource.isLoading() && !resource.value()) {
+        <p class="empty-state">Loading project…</p>
       }
       @if (resource.error()) {
         <p class="error">Could not load project.</p>
       }
       @if (resource.value(); as project) {
         <header class="page-header">
-          <h1>{{ project.code }} — {{ project.name }}</h1>
-          <a routerLink="/projects">‹ All projects</a>
+          <div>
+            <a class="back-link" routerLink="/projects"><chronos-icon name="chevron-left" [size]="16" /> All projects</a>
+            <h1>{{ project.code }} — {{ project.name }}</h1>
+            <p class="page-subtitle">{{ project.tasks.length }} {{ project.tasks.length === 1 ? 'task' : 'tasks' }} · starts {{ startLabel(project.startDate) }}</p>
+          </div>
         </header>
 
         <section class="card">
-          <h2>New task</h2>
-          <form class="toolbar" (submit)="onCreateTask($event, project.id)">
-            <input type="text" placeholder="Task name" [value]="taskName()" (input)="taskName.set($any($event.target).value)" />
-            <input type="date" aria-label="Start date" [value]="taskStart()" (input)="taskStart.set($any($event.target).value)" />
-            <input type="date" aria-label="End date" [value]="taskEnd()" (input)="taskEnd.set($any($event.target).value)" />
-            <button type="submit" [disabled]="submitting()">Add task</button>
+          <div class="card-header"><h2>New task</h2></div>
+          <form class="form-grid" (submit)="onCreateTask($event, project.id)">
+            <label>
+              Task name
+              <input type="text" placeholder="Install PLC" [value]="taskName()" (input)="taskName.set($any($event.target).value)" />
+            </label>
+            <label>
+              Start
+              <input type="date" aria-label="Start date" [value]="taskStart()" (input)="taskStart.set($any($event.target).value)" />
+            </label>
+            <label>
+              End
+              <input type="date" aria-label="End date" [value]="taskEnd()" (input)="taskEnd.set($any($event.target).value)" />
+            </label>
+            <button type="submit" [disabled]="submitting()"><chronos-icon name="plus" [size]="17" /> Add task</button>
+            @if (error()) {
+              <p class="error">{{ error() }}</p>
+            }
           </form>
-          @if (error()) {
-            <p class="error">{{ error() }}</p>
-          }
         </section>
 
         @if (project.tasks.length > 0) {
-          <chronos-gantt-chart
-            [tasks]="project.tasks"
-            (dateChange)="onChartDateChange(project.id, $event)"
-            (progressChange)="onChartProgressChange(project.id, $event)" />
-          <p class="empty-state">Drag a bar to reschedule it, or its progress handle to update progress.</p>
+          <section class="card card-flush">
+            <div class="chart-head">
+              <h2>Timeline</h2>
+              <span class="item-meta hint">Drag a bar to reschedule, or its handle to set progress.</span>
+            </div>
+            <chronos-gantt-chart
+              [tasks]="project.tasks"
+              (dateChange)="onChartDateChange(project.id, $event)"
+              (progressChange)="onChartProgressChange(project.id, $event)" />
+          </section>
 
-          <section class="card">
-            <h2>Tasks</h2>
+          <section class="card card-flush">
+            <div class="chart-head">
+              <h2>Tasks</h2>
+              <span class="item-meta">Tap a task to edit dates, progress and dependencies.</span>
+            </div>
             @for (task of project.tasks; track task.id) {
               <chronos-gantt-task-editor
                 [task]="task"
@@ -63,19 +85,26 @@ import { Observable } from 'rxjs';
                 (removeDependency)="removeDependency(project.id, task.id, $event)" />
             }
             @if (editError()) {
-              <p class="error">{{ editError() }}</p>
+              <p class="error edit-error">{{ editError() }}</p>
             }
           </section>
         } @else {
-          <p class="empty-state">No tasks yet — add one above.</p>
+          <div class="card empty">
+            <span class="empty-icon"><chronos-icon name="projects" /></span>
+            <strong>No tasks yet — add one above.</strong>
+            <p>Tasks appear on the timeline, where you can drag them to reschedule.</p>
+          </div>
         }
 
         <section class="card">
-          <h2>Linked Kanban boards</h2>
+          <div class="card-header"><h2>Linked Kanban boards</h2></div>
           @for (board of linkedBoards(); track board.id) {
             <div class="item-row">
-              <span>{{ board.name }}</span>
-              <a routerLink="/boards" [queryParams]="{ boardId: board.id }">Open board ›</a>
+              <span class="item-main">
+                <span class="icon-tile"><chronos-icon name="boards" [size]="17" /></span>
+                <span class="item-title">{{ board.name }}</span>
+              </span>
+              <a class="btn btn-sm" routerLink="/boards" [queryParams]="{ boardId: board.id }">Open board ›</a>
             </div>
           } @empty {
             <p class="empty-state">No boards linked to this project.</p>
@@ -83,6 +112,47 @@ import { Observable } from 'rxjs';
         </section>
       }
     </div>
+  `,
+  styles: `
+    .chart-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-2) var(--space-4);
+      flex-wrap: wrap;
+      padding: var(--space-4) var(--space-5) var(--space-3);
+      border-bottom: 1px solid var(--color-border-light);
+
+      h2 {
+        margin: 0;
+      }
+
+      @media (max-width: 767px) {
+        padding: var(--space-3) var(--space-4);
+      }
+    }
+
+    chronos-gantt-chart ::ng-deep .gantt-container {
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0;
+    }
+
+    chronos-gantt-task-editor:last-of-type ::ng-deep .task-editor {
+      border-bottom: none;
+    }
+
+    .edit-error {
+      margin: 0;
+      padding: var(--space-3) var(--space-4);
+    }
+
+    @media (pointer: coarse), (max-width: 767px) {
+      .hint {
+        display: none;
+      }
+    }
   `
 })
 export class ProjectGanttPageComponent {
@@ -105,6 +175,10 @@ export class ProjectGanttPageComponent {
   protected readonly submitting = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly editError = signal<string | null>(null);
+
+  protected startLabel(iso: string): string {
+    return formatDate(iso);
+  }
 
   // userId null unassigns. Feeds the resource-availability view (AssignedTasks per user).
   assignTask(projectId: string, taskId: string, userId: string | null): void {

@@ -280,6 +280,22 @@ the same repository round trips as the Sqlite-backed tests elsewhere in that pro
 against a real SQL Server / PostgreSQL container via Testcontainers, to prove the multi-DB
 abstraction actually holds on those engines and not only on Sqlite.
 
+## UI
+
+- **Shell** (`app.component.ts`). On screens 1024 px and wider: a fixed sidebar with grouped
+  navigation and a user card. Below that: a sticky top bar plus a **bottom tab bar** (Leave,
+  Availability, Projects, Boards, More), where "More" opens a bottom sheet with the remaining pages
+  and Log out. Safe-area insets are respected (`viewport-fit=cover`).
+- **Design system** (`src/styles.scss`). It is token-driven, and dark mode follows the OS unless
+  `<html data-theme="light|dark">` pins it. Touch-sized controls (44 px) apply on coarse pointers,
+  and 16 px inputs on phones stop iOS from zooming on focus.
+  - Layout blocks: `.page`, `.page-header`, `.layout-split`, `.card`, `.form-grid`/`.form-stack`,
+    `.stepper`, `.chips`, `.empty`, badges.
+  - A bare `<form>` has no layout of its own; pick one of the layout classes.
+- **Icons**: `shared/ui/icon.component.ts`, inline SVG with no dependency.
+- **Gantt**: Frappe's SVG is themed globally from the same tokens. The adapter trims the 100 px of
+  popup headroom Frappe adds below the grid.
+
 ## Deployment (Vercel + Supabase)
 
 One Vercel project (`chronos`, framework **Services**) serves both halves from one origin, per

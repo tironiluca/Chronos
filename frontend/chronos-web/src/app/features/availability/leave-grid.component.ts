@@ -2,8 +2,10 @@ import { Component, computed, input } from '@angular/core';
 import { ResourceAvailabilityDto } from '../../core/api/resource-availability.model';
 
 interface DayColumn {
-  date: string; // ISO yyyy-MM-dd
-  day: number; // day-of-month, for the header
+  date: string; // ISO date
+  day: number; // day of month
+  weekday: string; // single-letter weekday, display only
+  weekend: boolean;
 }
 
 interface EmployeeRow {
@@ -24,7 +26,9 @@ function daysInMonth(monthStart: string): DayColumn[] {
 
   const columns: DayColumn[] = [];
   for (let day = 1; day <= lastDay; day++) {
-    columns.push({ date: isoDate(new Date(Date.UTC(year, month, day))), day });
+    const date = new Date(Date.UTC(year, month, day));
+    const dow = date.getUTCDay();
+    columns.push({ date: isoDate(date), day, weekday: 'SMTWTFS'[dow], weekend: dow === 0 || dow === 6 });
   }
   return columns;
 }
@@ -55,7 +59,7 @@ function leaveDaysFor(entry: ResourceAvailabilityDto, columns: DayColumn[]): Set
         <tr>
           <th class="employee-col">Employee</th>
           @for (column of columns(); track column.date) {
-            <th>{{ column.day }}</th>
+            <th [class.weekend]="column.weekend" [class.today]="column.date === today" [attr.data-wd]="column.weekday">{{ column.day }}</th>
           }
         </tr>
       </thead>
@@ -64,12 +68,12 @@ function leaveDaysFor(entry: ResourceAvailabilityDto, columns: DayColumn[]): Set
           <tr>
             <td class="employee-col">{{ row.displayName }}</td>
             @for (column of columns(); track column.date) {
-              <td [class.on-leave]="row.leaveDays.has(column.date)"></td>
+              <td [class.weekend]="column.weekend" [class.on-leave]="row.leaveDays.has(column.date)"></td>
             }
           </tr>
         } @empty {
           <tr>
-            <td class="employee-col" [attr.colspan]="columns().length + 1">No employees in scope.</td>
+            <td class="employee-col empty-row" [attr.colspan]="columns().length + 1">No employees in scope.</td>
           </tr>
         }
       </tbody>
@@ -83,42 +87,109 @@ function leaveDaysFor(entry: ResourceAvailabilityDto, columns: DayColumn[]): Set
       width: 100%;
     }
 
-    .leave-grid th,
-    .leave-grid td {
-      border: 1px solid var(--color-border-light);
+    th,
+    td {
+      border: none;
+      border-bottom: 1px solid var(--color-border-light);
       text-align: center;
-      min-width: 1.75rem;
-      padding: 0.3rem 0.15rem;
+      min-width: 2rem;
+      height: 40px;
+      padding: 0 2px;
+      font-variant-numeric: tabular-nums;
     }
 
-    .leave-grid thead th {
-      background: var(--color-bg);
+    thead th {
+      background: var(--color-surface);
       position: sticky;
       top: 0;
+      height: 48px;
+      color: var(--color-text-muted);
+      font-size: var(--font-size-xs);
+      text-transform: none;
+      letter-spacing: 0;
+      line-height: 1.1;
+
+      &[data-wd]::before {
+        content: attr(data-wd);
+        display: block;
+        font-size: 0.625rem;
+        font-weight: 600;
+        color: var(--color-text-subtle);
+      }
+
+      &.today {
+        color: var(--color-primary);
+
+        &::before {
+          color: var(--color-primary);
+        }
+      }
+    }
+
+    .weekend {
+      background: var(--color-surface-2);
+    }
+
+    td.on-leave {
+      background: transparent;
+      position: relative;
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: 8px 1px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--color-primary) 55%, var(--color-surface));
+      }
     }
 
     .employee-col {
       text-align: left;
       white-space: nowrap;
-      padding-right: var(--space-2);
-      padding-left: var(--space-2);
+      padding: 0 var(--space-4);
       position: sticky;
       left: 0;
       background: var(--color-surface);
       z-index: 1;
+      font-weight: 550;
+      font-size: var(--font-size-sm);
+      min-width: 9rem;
+      max-width: 12rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 1px 0 0 var(--color-border-light);
     }
 
     thead .employee-col {
-      background: var(--color-bg);
       z-index: 2;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--color-text-muted);
     }
 
-    .on-leave {
-      background: color-mix(in srgb, var(--color-primary) 25%, var(--color-surface));
+    .empty-row {
+      color: var(--color-text-muted);
+      font-weight: 400;
+      padding: var(--space-5) var(--space-4);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    @media (max-width: 767px) {
+      .employee-col {
+        min-width: 7rem;
+        padding: 0 var(--space-3);
+      }
     }
   `
 })
 export class LeaveGridComponent {
+  protected readonly today = isoDate(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())));
+
   availability = input.required<ResourceAvailabilityDto[]>();
   monthStart = input.required<string>(); // ISO date, first day of the visible month
 

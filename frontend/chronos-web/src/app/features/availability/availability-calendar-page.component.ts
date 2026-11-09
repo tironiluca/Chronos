@@ -1,3 +1,4 @@
+import { IconComponent } from '../../shared/ui/icon.component';
 import { Component, computed, inject, signal } from '@angular/core';
 import { DepartmentPickerComponent } from '../departments/department-picker.component';
 import { ProjectPickerComponent } from '../projects/project-picker.component';
@@ -27,16 +28,22 @@ function lastOfMonth(monthStart: Date): Date {
 @Component({
   selector: 'chronos-availability-calendar-page',
   standalone: true,
-  imports: [DepartmentPickerComponent, ProjectPickerComponent, LeaveGridComponent],
+  imports: [IconComponent, DepartmentPickerComponent, ProjectPickerComponent, LeaveGridComponent],
   template: `
     <div class="page">
       <header class="page-header">
-        <h1>Resource availability</h1>
+        <div>
+          <h1>Availability</h1>
+          <p class="page-subtitle">Who is away, day by day. Approved leave only.</p>
+        </div>
       </header>
-      <div class="toolbar">
-        <button type="button" (click)="shiftMonth(-1)">‹ Prev</button>
-        <span class="month-label">{{ monthLabel() }}</span>
-        <button type="button" (click)="shiftMonth(1)">Next ›</button>
+
+      <div class="filters">
+        <div class="stepper" role="group" aria-label="Month">
+          <button type="button" aria-label="Previous month" (click)="shiftMonth(-1)"><chronos-icon name="chevron-left" /></button>
+          <span class="stepper-label">{{ monthLabel() }}</span>
+          <button type="button" aria-label="Next month" (click)="shiftMonth(1)"><chronos-icon name="chevron-right" /></button>
+        </div>
         <chronos-department-picker
           [selectedId]="departmentId()"
           allOptionLabel="All departments"
@@ -47,23 +54,60 @@ function lastOfMonth(monthStart: Date): Date {
           (selectionChange)="projectId.set($event)" />
       </div>
 
-      @if (resource.isLoading()) {
-        <p class="empty-state">Loading availability...</p>
-      }
       @if (resource.error()) {
         <p class="error">Could not load availability.</p>
       }
 
-      <div class="card table-scroll">
-        <chronos-leave-grid [availability]="rows()" [monthStart]="monthStartIso()" />
-      </div>
+      <section class="card card-flush">
+        <div class="grid-head">
+          <span class="legend">
+            <span><span class="swatch on-leave-swatch"></span>On leave</span>
+            <span><span class="swatch weekend-swatch"></span>Weekend</span>
+          </span>
+          @if (resource.isLoading()) {
+            <span class="empty-state">Loading…</span>
+          }
+        </div>
+        <div class="table-scroll">
+          <chronos-leave-grid [availability]="rows()" [monthStart]="monthStartIso()" />
+        </div>
+      </section>
     </div>
   `,
   styles: `
-    .month-label {
-      font-weight: 600;
-      min-width: 8rem;
-      text-align: center;
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      align-items: center;
+
+      @media (max-width: 767px) {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+
+        .stepper {
+          grid-column: 1 / -1;
+          justify-content: space-between;
+        }
+      }
+    }
+
+    .grid-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    .on-leave-swatch {
+      background: color-mix(in srgb, var(--color-primary) 55%, var(--color-surface));
+    }
+
+    .weekend-swatch {
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-border);
     }
   `
 })

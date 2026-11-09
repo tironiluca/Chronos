@@ -1,15 +1,21 @@
 import { Component, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { IconComponent } from '../../shared/ui/icon.component';
 import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'chronos-register',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, IconComponent],
   template: `
     <div class="auth-page">
+      <a class="auth-brand" routerLink="/login">
+        <span class="brand-mark"><chronos-icon name="clock" [size]="18" [strokeWidth]="2.2" /></span>
+        Chronos
+      </a>
       <form class="auth-card" (submit)="onSubmit($event)">
         <h1>Create account</h1>
+        <p class="auth-subtitle">Join your organization&rsquo;s workspace.</p>
         <label>
           Organization ID
           <input
@@ -19,18 +25,18 @@ import { AuthService } from '../../core/auth/auth.service';
             (input)="organizationId.set($any($event.target).value)"
           />
         </label>
-        <p><a routerLink="/register-organization">Setting up a new organization? Register it here</a></p>
+        <p class="hint">Ask your admin for it, or <a routerLink="/register-organization">register a new organization</a>.</p>
         <label>
           Display name
           <input type="text" [value]="displayName()" (input)="displayName.set($any($event.target).value)" />
         </label>
         <label>
           Email
-          <input type="email" [value]="email()" (input)="email.set($any($event.target).value)" />
+          <input type="email" autocomplete="email" inputmode="email" [value]="email()" (input)="email.set($any($event.target).value)" />
         </label>
         <label>
           Password
-          <input type="password" [value]="password()" (input)="password.set($any($event.target).value)" />
+          <input type="password" autocomplete="new-password" [value]="password()" (input)="password.set($any($event.target).value)" />
         </label>
         <button type="submit" [disabled]="submitting()">Register</button>
         @if (error()) {
@@ -39,7 +45,9 @@ import { AuthService } from '../../core/auth/auth.service';
         @if (success()) {
           <p class="success">Account created. You can now log in.</p>
         }
-        <p><a routerLink="/login">Already have an account? Log in</a></p>
+        <div class="auth-footer">
+          <p>Already have an account? <a routerLink="/login">Log in</a></p>
+        </div>
       </form>
     </div>
   `,

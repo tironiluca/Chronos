@@ -8,7 +8,7 @@ import { LeaveType } from '../../core/api/leave.model';
   selector: 'chronos-leave-request-form',
   standalone: true,
   template: `
-    <form (submit)="onSubmit($event)">
+    <form class="form-stack" (submit)="onSubmit($event)">
       <label>
         Type
         <select [value]="type()" (change)="type.set($any($event.target).value)">
@@ -18,29 +18,23 @@ import { LeaveType } from '../../core/api/leave.model';
           <option value="Compensatory">Compensatory</option>
         </select>
       </label>
-      <label>
-        Start date
-        <input type="date" [value]="startDate()" (input)="startDate.set($any($event.target).value)" />
-      </label>
-      <label>
-        End date
-        <input type="date" [value]="endDate()" (input)="endDate.set($any($event.target).value)" />
-      </label>
-      <button type="submit" [disabled]="submitting()">Request</button>
+      <div class="form-row-2">
+        <label>
+          From
+          <input type="date" [value]="startDate()" (input)="startDate.set($any($event.target).value)" />
+        </label>
+        <label>
+          To
+          <input type="date" [value]="endDate()" (input)="endDate.set($any($event.target).value)" />
+        </label>
+      </div>
       @if (error()) {
         <p class="error">{{ error() }}</p>
       }
+      <button type="submit" class="btn-block" [disabled]="submitting()">
+        {{ submitting() ? 'Sending…' : 'Request leave' }}
+      </button>
     </form>
-  `,
-  styles: `
-    form {
-      align-items: flex-end;
-    }
-
-    .error {
-      flex-basis: 100%;
-      margin: 0;
-    }
   `
 })
 export class LeaveRequestFormComponent {

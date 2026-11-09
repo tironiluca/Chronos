@@ -11,16 +11,28 @@ import { LeaveRequestListComponent } from './leave-request-list.component';
   template: `
     <div class="page">
       <header class="page-header">
-        <h1>Leave requests</h1>
+        <div>
+          <h1>Leave</h1>
+          <p class="page-subtitle">Request time off and keep track of approvals.</p>
+        </div>
       </header>
-      <section class="card">
-        <h2>New request</h2>
-        <chronos-leave-request-form (created)="list.refresh()" />
-      </section>
-      <section class="card">
-        <h2>Your requests</h2>
-        <chronos-leave-request-list #list />
-      </section>
+      <div class="layout-split">
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>New request</h2>
+              <p class="card-subtitle">Approvers review it from the requests list.</p>
+            </div>
+          </div>
+          <chronos-leave-request-form (created)="list.refresh()" />
+        </section>
+        <section class="card">
+          <div class="card-header">
+            <h2>Requests</h2>
+          </div>
+          <chronos-leave-request-list #list />
+        </section>
+      </div>
     </div>
   `
 })

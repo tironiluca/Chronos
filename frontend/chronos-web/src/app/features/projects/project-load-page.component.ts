@@ -1,3 +1,4 @@
+import { IconComponent } from '../../shared/ui/icon.component';
 import { Component, computed, inject, signal } from '@angular/core';
 import { ProjectService } from '../../core/api/project.service';
 import { ProjectLoadGridComponent } from './project-load-grid.component';
@@ -9,52 +10,72 @@ import { isoDate, quarterEnd, quarterLabel, quarterStart } from './iso-week';
 @Component({
   selector: 'chronos-project-load-page',
   standalone: true,
-  imports: [ProjectLoadGridComponent],
+  imports: [IconComponent, ProjectLoadGridComponent],
   template: `
     <div class="page">
       <header class="page-header">
-        <h1>Project load by week</h1>
+        <div>
+          <h1>Project load</h1>
+          <p class="page-subtitle">Tasks running per project, week by week.</p>
+        </div>
+        <div class="stepper" role="group" aria-label="Quarter">
+          <button type="button" aria-label="Previous quarter" (click)="shiftQuarter(-1)"><chronos-icon name="chevron-left" /></button>
+          <span class="stepper-label">{{ label() }}</span>
+          <button type="button" aria-label="Next quarter" (click)="shiftQuarter(1)"><chronos-icon name="chevron-right" /></button>
+        </div>
       </header>
-      <div class="toolbar">
-        <button type="button" (click)="shiftQuarter(-1)">‹ Prev</button>
-        <span class="quarter-label">{{ label() }}</span>
-        <button type="button" (click)="shiftQuarter(1)">Next ›</button>
-      </div>
 
-      <ul class="chips">
-        @for (project of allProjects(); track project.id) {
+      @if (allProjects().length > 0) {
+        <ul class="chips" aria-label="Filter projects">
           <li>
-            <button
-              type="button"
-              class="chip"
-              [class.chip-active]="selectedIds().has(project.id)"
-              (click)="toggleProject(project.id)">
-              {{ project.code }}
-            </button>
+            <button type="button" class="chip" [class.chip-active]="selectedIds().size === 0" (click)="clearSelection()">All</button>
           </li>
-        }
-        @if (selectedIds().size > 0) {
-          <li><button type="button" class="btn-ghost btn-sm" (click)="clearSelection()">Show all</button></li>
-        }
-      </ul>
-
-      @if (resource.isLoading()) {
-        <p class="empty-state">Loading projects...</p>
+          @for (project of allProjects(); track project.id) {
+            <li>
+              <button
+                type="button"
+                class="chip"
+                [class.chip-active]="selectedIds().has(project.id)"
+                (click)="toggleProject(project.id)">
+                {{ project.code }}
+              </button>
+            </li>
+          }
+        </ul>
       }
+
       @if (resource.error()) {
         <p class="error">Could not load projects.</p>
       }
 
-      <div class="card table-scroll">
-        <chronos-project-load-grid [projects]="visibleProjects()" [from]="fromIso()" [to]="toIso()" />
-      </div>
+      <section class="card card-flush">
+        <div class="grid-head">
+          <span class="legend">Darker cells = more tasks overlapping that week</span>
+          @if (resource.isLoading()) {
+            <span class="empty-state">Loading…</span>
+          }
+        </div>
+        <div class="table-scroll">
+          <chronos-project-load-grid [projects]="visibleProjects()" [from]="fromIso()" [to]="toIso()" />
+        </div>
+      </section>
     </div>
   `,
   styles: `
-    .quarter-label {
-      font-weight: 600;
-      min-width: 6rem;
-      text-align: center;
+    .grid-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    @media (max-width: 767px) {
+      .stepper {
+        width: 100%;
+        justify-content: space-between;
+      }
     }
   `
 })

@@ -1,15 +1,21 @@
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { IconComponent } from '../../shared/ui/icon.component';
 import { OrganizationService } from '../../core/organizations/organization.service';
 
 @Component({
   selector: 'chronos-register-organization',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, IconComponent],
   template: `
     <div class="auth-page">
+      <a class="auth-brand" routerLink="/login">
+        <span class="brand-mark"><chronos-icon name="clock" [size]="18" [strokeWidth]="2.2" /></span>
+        Chronos
+      </a>
       <form class="auth-card" (submit)="onSubmit($event)">
         <h1>Register organization</h1>
+        <p class="auth-subtitle">Create a workspace for your team.</p>
         <label>
           Organization name
           <input type="text" [value]="name()" (input)="name.set($any($event.target).value)" />
@@ -34,8 +40,10 @@ import { OrganizationService } from '../../core/organizations/organization.servi
             &mdash; share it with your team so they can register.
           </p>
         }
-        <p><a routerLink="/register">Already have an organization ID? Register as a user</a></p>
-        <p><a routerLink="/login">Already have an account? Log in</a></p>
+        <div class="auth-footer">
+          <p>Have an organization ID? <a routerLink="/register">Register as a user</a></p>
+          <p>Already have an account? <a routerLink="/login">Log in</a></p>
+        </div>
       </form>
     </div>
   `,
