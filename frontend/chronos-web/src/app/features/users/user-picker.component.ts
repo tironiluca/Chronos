@@ -16,6 +16,16 @@ import { UserDirectoryEntryDto } from '../../core/api/user.model';
         <option [value]="user.id" [selected]="user.id === selectedId()">{{ user.displayName }}</option>
       }
     </select>
+  `,
+  styles: `
+    :host {
+      display: block;
+      min-width: 0;
+    }
+
+    select {
+      width: 100%;
+    }
   `
 })
 export class UserPickerComponent {

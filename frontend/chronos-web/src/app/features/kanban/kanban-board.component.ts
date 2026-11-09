@@ -1,5 +1,6 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { IconComponent } from '../../shared/ui/icon.component';
 import { BoardService } from '../../core/api/board.service';
 import { UserService } from '../../core/api/user.service';
 import { UserPickerComponent } from '../users/user-picker.component';
@@ -16,31 +17,36 @@ import { BoardDetailDto } from '../../core/api/board.model';
 @Component({
   selector: 'chronos-kanban-board',
   standalone: true,
-  imports: [RouterLink, UserPickerComponent],
+  imports: [RouterLink, UserPickerComponent, IconComponent],
   template: `
-    @if (resource.isLoading()) {
-      <p class="empty-state">Loading board...</p>
+    @if (resource.isLoading() && !resource.value()) {
+      <p class="empty-state">Loading board…</p>
     }
     @if (resource.error()) {
       <p class="error">Could not load board.</p>
     }
     @if (resource.value(); as board) {
       <div class="kanban-board">
-        <div class="page-header">
-          <h2>{{ board.name }}</h2>
-          @if (linkedProject(); as project) {
-            <a [routerLink]="['/projects', project.id, 'gantt']">Gantt: {{ project.code }} ›</a>
-          }
+        <div class="board-header">
+          <div class="board-title">
+            <h2>{{ board.name }}</h2>
+            @if (linkedProject(); as project) {
+              <a class="gantt-link" [routerLink]="['/projects', project.id, 'gantt']">Gantt: {{ project.code }} ›</a>
+            }
+          </div>
+          <form class="add-column" (submit)="onCreateColumn($event, board)">
+            <input
+              type="text"
+              placeholder="New column"
+              aria-label="New column name"
+              [value]="newColumnName()"
+              (input)="newColumnName.set($any($event.target).value)" />
+            <button type="submit" class="btn-icon" aria-label="Add column"><chronos-icon name="plus" [size]="18" /></button>
+          </form>
         </div>
-
-        <form class="toolbar" (submit)="onCreateColumn($event, board)">
-          <input
-            type="text"
-            placeholder="New column name"
-            [value]="newColumnName()"
-            (input)="newColumnName.set($any($event.target).value)" />
-          <button type="submit">Add column</button>
-        </form>
+        @if (actionError()) {
+          <p class="error">{{ actionError() }}</p>
+        }
 
         <div class="kanban-columns">
           @for (column of board.columns; track column.id) {
@@ -50,7 +56,10 @@ import { BoardDetailDto } from '../../core/api/board.model';
               (dragover)="onDragOver($event, column.id)"
               (dragleave)="onDragLeave(column.id)"
               (drop)="onDrop($event, board.id, column.id)">
-              <h3>{{ column.name }}</h3>
+              <div class="column-header">
+                <h3>{{ column.name }}</h3>
+                <span class="count">{{ column.cards.length }}</span>
+              </div>
               <ul class="kanban-cards">
                 @for (card of column.cards; track card.id) {
                   <li class="kanban-card" draggable="true" (dragstart)="onDragStart($event, column.id, card.id)" (dragend)="onDragEnd()">
@@ -66,6 +75,7 @@ import { BoardDetailDto } from '../../core/api/board.model';
                         (selectionChange)="assign(board.id, column.id, card.id, $event)" />
                       @if (board.columns.length > 1) {
                         <select
+                          class="move-select"
                           [attr.aria-label]="'Move ' + card.title"
                           (change)="moveCard(board.id, column.id, card.id, $any($event.target).value); $any($event.target).value = ''">
                           <option value="" selected>Move to…</option>
@@ -79,13 +89,14 @@ import { BoardDetailDto } from '../../core/api/board.model';
                     </div>
                   </li>
                 } @empty {
-                  <li class="empty-state">No cards yet.</li>
+                  <li class="column-empty">Drop cards here</li>
                 }
               </ul>
               <form class="kanban-add-card" (submit)="onCreateCard($event, board.id, column.id)">
                 <input
                   type="text"
-                  placeholder="New card title"
+                  placeholder="Add a card…"
+                  [attr.aria-label]="'New card in ' + column.name"
                   [value]="newCardTitles()[column.id] ?? ''"
                   (input)="setNewCardTitle(column.id, $any($event.target).value)" />
                 @if (linkedProject(); as project) {
@@ -99,14 +110,13 @@ import { BoardDetailDto } from '../../core/api/board.model';
                     }
                   </select>
                 }
-                <button type="submit" class="btn-sm">Add card</button>
+                @if (newCardTitles()[column.id]) {
+                  <button type="submit" class="btn-sm">Add card</button>
+                }
               </form>
             </div>
           }
         </div>
-        @if (actionError()) {
-          <p class="error">{{ actionError() }}</p>
-        }
       </div>
     }
   `,
@@ -117,25 +127,81 @@ import { BoardDetailDto } from '../../core/api/board.model';
       gap: var(--space-4);
     }
 
+    .board-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
+
+    .board-title {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+
+      h2 {
+        margin: 0;
+        font-size: var(--font-size-xl);
+      }
+    }
+
+    .gantt-link {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+    }
+
+    .add-column {
+      display: flex;
+      gap: var(--space-2);
+
+      input {
+        width: 180px;
+
+        @media (max-width: 767px) {
+          width: auto;
+          flex: 1;
+        }
+      }
+
+      @media (max-width: 767px) {
+        width: 100%;
+      }
+    }
+
+    /* Columns scroll sideways; on phones each column is ~85% of the screen and snaps into place. */
     .kanban-columns {
       display: flex;
       gap: var(--space-4);
       overflow-x: auto;
-      padding-bottom: var(--space-2);
+      padding-bottom: var(--space-3);
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+
+      @media (max-width: 767px) {
+        gap: var(--space-3);
+        margin-inline: calc(-1 * var(--space-4));
+        padding-inline: var(--space-4);
+        scroll-padding-inline: var(--space-4);
+      }
     }
 
     .kanban-column {
       display: flex;
       flex-direction: column;
       gap: var(--space-3);
-      flex: 0 0 260px;
-      background: var(--color-bg);
-      border: 1px solid var(--color-border-light);
-      border-radius: var(--radius-md);
+      flex: 0 0 290px;
+      scroll-snap-align: start;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
       padding: var(--space-3);
+      transition: border-color var(--transition-fast), background var(--transition-fast);
 
-      h3 {
-        margin: 0;
+      @media (max-width: 767px) {
+        flex-basis: 84vw;
       }
     }
 
@@ -145,46 +211,127 @@ import { BoardDetailDto } from '../../core/api/board.model';
       background: var(--color-primary-bg);
     }
 
-    .kanban-card[draggable='true'] {
-      cursor: grab;
+    .column-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px var(--space-1) 0;
+
+      h3 {
+        margin: 0;
+        font-size: var(--font-size-sm);
+        font-weight: 650;
+      }
+
+      .count {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        display: inline-grid;
+        place-items: center;
+        border-radius: var(--radius-full);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        font-size: var(--font-size-xs);
+        font-weight: 600;
+        color: var(--color-text-muted);
+      }
     }
 
     .kanban-cards {
       display: flex;
       flex-direction: column;
       gap: var(--space-2);
+      min-height: 48px;
     }
 
     .kanban-card {
       display: flex;
       flex-direction: column;
-      align-items: flex-start;
-      gap: 0.35rem;
+      gap: var(--space-2);
       background: var(--color-surface);
-      border-radius: var(--radius-sm);
-      box-shadow: var(--shadow-sm);
-      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-xs);
+      padding: var(--space-3);
+      transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+
+      &:hover {
+        box-shadow: var(--shadow-sm);
+        border-color: var(--color-border-strong);
+      }
+
+      &[draggable='true'] {
+        cursor: grab;
+      }
     }
 
     .kanban-card-title {
       font-size: var(--font-size-sm);
-      font-weight: 500;
-    }
-
-    .kanban-card-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      flex-wrap: wrap;
+      font-weight: 600;
+      line-height: 1.35;
     }
 
     .kanban-card-task {
+      align-self: flex-start;
       font-size: var(--font-size-xs);
-      text-decoration: none;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      background: var(--color-primary-bg);
+    }
+
+    .kanban-card-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-2);
+
+      @media (max-width: 767px) {
+        grid-template-columns: 1fr;
+      }
+
+      select {
+        width: 100%;
+        font-size: var(--font-size-sm);
+        box-shadow: none;
+      }
+
+      chronos-user-picker {
+        min-width: 0;
+      }
+    }
+
+    .column-empty {
+      display: grid;
+      place-items: center;
+      height: 56px;
+      border: 1px dashed var(--color-border-strong);
+      border-radius: var(--radius-md);
+      color: var(--color-text-subtle);
+      font-size: var(--font-size-xs);
     }
 
     .kanban-add-card {
+      display: flex;
+      flex-direction: column;
       gap: var(--space-2);
+
+      input,
+      select {
+        width: 100%;
+        background: transparent;
+        box-shadow: none;
+        border-style: dashed;
+      }
+
+      input:focus {
+        background: var(--color-surface);
+        border-style: solid;
+      }
+
+      button {
+        align-self: flex-start;
+      }
     }
   `
 })

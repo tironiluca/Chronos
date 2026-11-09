@@ -2,6 +2,8 @@ import { Component, computed, input, linkedSignal, output, signal } from '@angul
 import { DependencyType, GanttTaskDto } from '../../core/api/project.model';
 import { UserDirectoryEntryDto } from '../../core/api/user.model';
 import { UserPickerComponent } from '../users/user-picker.component';
+import { IconComponent } from '../../shared/ui/icon.component';
+import { formatDateRange } from '../../shared/format';
 
 export interface TaskScheduleChange {
   startDate: string;
@@ -47,87 +49,267 @@ export function dependentsOf(tasks: GanttTaskDto[], taskId: string): Set<string>
 @Component({
   selector: 'chronos-gantt-task-editor',
   standalone: true,
-  imports: [UserPickerComponent],
+  imports: [UserPickerComponent, IconComponent],
   template: `
-    <div class="task-editor">
-      <div class="task-editor-head">
-        <strong>{{ task().name }}</strong>
-        <span class="empty-state">{{ task().startDate }} → {{ task().endDate }} · {{ task().progressPercent }}%</span>
+    <details class="task-editor">
+      <summary class="task-summary">
+        <chronos-icon class="chevron" name="chevron-right" [size]="16" />
+        <div class="task-main">
+          <strong class="task-name">{{ task().name }}</strong>
+          <span class="task-dates">{{ range() }}</span>
+        </div>
+        <div class="task-progress" [attr.aria-label]="task().progressPercent + '% complete'">
+          <span class="bar"><span [style.width.%]="task().progressPercent"></span></span>
+          <span class="pct">{{ task().progressPercent }}%</span>
+        </div>
         <chronos-user-picker
+          class="task-assignee"
+          (click)="$event.stopPropagation()"
           [users]="users()"
           [selectedId]="task().assignedUserId"
           [ariaLabel]="'Assignee for ' + task().name"
           (selectionChange)="assign.emit($event)" />
-      </div>
+      </summary>
 
-      <form class="toolbar" (submit)="onReschedule($event)">
-        <input type="date" [attr.aria-label]="'Start date for ' + task().name" [value]="startDraft()"
-          (input)="startDraft.set($any($event.target).value)" />
-        <input type="date" [attr.aria-label]="'End date for ' + task().name" [value]="endDraft()"
-          (input)="endDraft.set($any($event.target).value)" />
-        <button type="submit" class="btn-sm" [disabled]="!scheduleDirty() || !!scheduleError()">Reschedule</button>
-
-        <input type="number" min="0" max="100" step="5" class="progress-input"
-          [attr.aria-label]="'Progress for ' + task().name" [value]="progressDraft()"
-          (input)="progressDraft.set($any($event.target).valueAsNumber)" />
-        <button type="button" class="btn-sm" [disabled]="!progressDirty()" (click)="onProgress()">Set progress</button>
-      </form>
-      @if (scheduleError()) {
-        <p class="error">{{ scheduleError() }}</p>
-      }
-
-      <div class="toolbar">
-        <span class="empty-state">Depends on:</span>
-        @for (predecessor of predecessors(); track predecessor.id) {
-          <span class="chip">
-            {{ predecessor.name }}
-            <button type="button" class="btn-ghost btn-sm" [attr.aria-label]="'Remove dependency on ' + predecessor.name"
-              (click)="removeDependency.emit(predecessor.id)">×</button>
-          </span>
-        } @empty {
-          <span class="empty-state">nothing</span>
-        }
-      </div>
-
-      @if (candidates().length > 0) {
-        <form class="toolbar" (submit)="onAddDependency($event)">
-          <select [attr.aria-label]="'New predecessor for ' + task().name" (change)="predecessorDraft.set($any($event.target).value)">
-            <option value="" [selected]="!predecessorDraft()">Add predecessor…</option>
-            @for (candidate of candidates(); track candidate.id) {
-              <option [value]="candidate.id" [selected]="candidate.id === predecessorDraft()">{{ candidate.name }}</option>
-            }
-          </select>
-          <select [attr.aria-label]="'Dependency type for ' + task().name" (change)="typeDraft.set($any($event.target).value)">
-            @for (type of dependencyTypes; track type.value) {
-              <option [value]="type.value" [selected]="type.value === typeDraft()">{{ type.label }}</option>
-            }
-          </select>
-          <input type="number" min="-365" max="365" class="progress-input" title="Lag in days (negative = lead)"
-            [attr.aria-label]="'Lag days for ' + task().name" [value]="lagDraft()"
-            (input)="lagDraft.set($any($event.target).valueAsNumber)" />
-          <button type="submit" class="btn-sm" [disabled]="!predecessorDraft()">Add dependency</button>
+      <div class="task-body">
+        <form class="section" (submit)="onReschedule($event)">
+          <span class="section-label">Schedule</span>
+          <div class="section-controls">
+            <input type="date" [attr.aria-label]="'Start date for ' + task().name" [value]="startDraft()"
+              (input)="startDraft.set($any($event.target).value)" />
+            <input type="date" [attr.aria-label]="'End date for ' + task().name" [value]="endDraft()"
+              (input)="endDraft.set($any($event.target).value)" />
+            <button type="submit" [disabled]="!scheduleDirty() || !!scheduleError()">Reschedule</button>
+          </div>
+          @if (scheduleError()) {
+            <p class="error">{{ scheduleError() }}</p>
+          }
         </form>
-      }
-    </div>
+
+        <div class="section">
+          <span class="section-label">Progress</span>
+          <div class="section-controls">
+            <input type="number" min="0" max="100" step="5" class="narrow" inputmode="numeric"
+              [attr.aria-label]="'Progress for ' + task().name" [value]="progressDraft()"
+              (input)="progressDraft.set($any($event.target).valueAsNumber)" />
+            <button type="button" [disabled]="!progressDirty()" (click)="onProgress()">Set progress</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-label">Depends on</span>
+          <div class="deps">
+            @for (predecessor of predecessors(); track predecessor.id) {
+              <span class="dep-chip">
+                {{ predecessor.name }}
+                <button type="button" class="dep-remove" [attr.aria-label]="'Remove dependency on ' + predecessor.name"
+                  (click)="removeDependency.emit(predecessor.id)"><chronos-icon name="close" [size]="14" /></button>
+              </span>
+            } @empty {
+              <span class="empty-state">No dependencies</span>
+            }
+          </div>
+          @if (candidates().length > 0) {
+            <form class="section-controls" (submit)="onAddDependency($event)">
+              <select [attr.aria-label]="'New predecessor for ' + task().name" (change)="predecessorDraft.set($any($event.target).value)">
+                <option value="" [selected]="!predecessorDraft()">Add predecessor…</option>
+                @for (candidate of candidates(); track candidate.id) {
+                  <option [value]="candidate.id" [selected]="candidate.id === predecessorDraft()">{{ candidate.name }}</option>
+                }
+              </select>
+              <select [attr.aria-label]="'Dependency type for ' + task().name" (change)="typeDraft.set($any($event.target).value)">
+                @for (type of dependencyTypes; track type.value) {
+                  <option [value]="type.value" [selected]="type.value === typeDraft()">{{ type.label }}</option>
+                }
+              </select>
+              <input type="number" min="-365" max="365" class="narrow" title="Lag in days (negative = lead)" inputmode="numeric"
+                [attr.aria-label]="'Lag days for ' + task().name" [value]="lagDraft()"
+                (input)="lagDraft.set($any($event.target).valueAsNumber)" />
+              <button type="submit" [disabled]="!predecessorDraft()">Add</button>
+            </form>
+          }
+        </div>
+      </div>
+    </details>
   `,
   styles: `
     .task-editor {
+      border-bottom: 1px solid var(--color-border-light);
+
+      &[open] {
+        .chevron {
+          transform: rotate(90deg);
+        }
+
+        .task-summary {
+          background: var(--color-surface-2);
+        }
+      }
+    }
+
+    .task-summary {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) 140px 190px;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      cursor: pointer;
+      list-style: none;
+      transition: background var(--transition-fast);
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+
+      &:hover {
+        background: var(--color-surface-2);
+      }
+
+      @media (max-width: 767px) {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        row-gap: var(--space-2);
+
+        .task-assignee {
+          grid-column: 2 / -1;
+        }
+      }
+    }
+
+    .chevron {
+      color: var(--color-text-subtle);
+      transition: transform var(--transition-fast);
+    }
+
+    .task-main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .task-name {
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .task-dates {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-muted);
+    }
+
+    .task-progress {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+
+      .bar {
+        flex: 1;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--color-surface-hover);
+        overflow: hidden;
+
+        span {
+          display: block;
+          height: 100%;
+          background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+      }
+
+      .pct {
+        font-size: var(--font-size-xs);
+        font-weight: 600;
+        color: var(--color-text-muted);
+        min-width: 2.5rem;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      @media (max-width: 767px) {
+        .bar {
+          display: none;
+        }
+      }
+    }
+
+    .task-body {
+      display: grid;
+      gap: var(--space-4);
+      padding: var(--space-3) var(--space-4) var(--space-5) calc(var(--space-4) + 28px);
+
+      @media (max-width: 767px) {
+        padding-left: var(--space-4);
+      }
+    }
+
+    .section {
       display: flex;
       flex-direction: column;
       gap: var(--space-2);
-      padding: var(--space-3) 0;
-      border-bottom: 1px solid var(--color-border-light);
+      margin: 0;
+
+      .error {
+        margin: 0;
+      }
     }
 
-    .task-editor-head {
+    .section-label {
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+    }
+
+    .section-controls {
       display: flex;
-      align-items: center;
-      gap: var(--space-3);
       flex-wrap: wrap;
+      gap: var(--space-2);
+
+      input[type='date'],
+      select {
+        flex: 1 1 160px;
+      }
+
+      .narrow {
+        width: 6rem;
+        flex: none;
+      }
     }
 
-    .progress-input {
-      width: 5rem;
+    .deps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .dep-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 30px;
+      padding: 0 4px 0 12px;
+      border-radius: var(--radius-full);
+      background: var(--color-primary-bg);
+      color: var(--color-primary);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+    }
+
+    .dep-remove {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      box-shadow: none;
+      color: inherit;
+
+      &:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+      }
     }
   `
 })
@@ -143,6 +325,7 @@ export class GanttTaskEditorComponent {
   removeDependency = output<string>();
 
   protected readonly dependencyTypes = DEPENDENCY_TYPES;
+  protected readonly range = computed(() => formatDateRange(this.task().startDate, this.task().endDate));
 
   protected readonly startDraft = linkedSignal(() => this.task().startDate);
   protected readonly endDraft = linkedSignal(() => this.task().endDate);

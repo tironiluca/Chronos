@@ -54,39 +54,72 @@ interface ProjectRow {
       width: 100%;
     }
 
-    .load-grid th,
-    .load-grid td {
-      border: 1px solid var(--color-border-light);
+    th,
+    td {
+      border: none;
+      border-bottom: 1px solid var(--color-border-light);
       text-align: center;
-      min-width: 2.5rem;
-      padding: 0.3rem 0.15rem;
+      min-width: 2.75rem;
+      height: 44px;
+      padding: 0 2px;
+      font-variant-numeric: tabular-nums;
     }
 
-    .load-grid thead th {
-      background: var(--color-bg);
+    thead th {
+      background: var(--color-surface);
       position: sticky;
       top: 0;
+      color: var(--color-text-muted);
+      letter-spacing: 0;
     }
 
-    .load-grid .project-col {
+    .project-col {
       text-align: left;
       white-space: nowrap;
-      padding-right: var(--space-2);
-      padding-left: var(--space-2);
+      padding: 0 var(--space-4);
       position: sticky;
       left: 0;
       background: var(--color-surface);
       z-index: 1;
+      font-size: var(--font-size-sm);
+      min-width: 10rem;
+      max-width: 16rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 1px 0 0 var(--color-border-light);
+
+      a {
+        font-weight: 700;
+        margin-right: 6px;
+      }
     }
 
-    .load-grid thead .project-col {
-      background: var(--color-bg);
+    thead .project-col {
       z-index: 2;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: var(--font-size-xs);
     }
 
-    .busy {
-      font-weight: 600;
-      background: color-mix(in srgb, var(--color-primary) var(--load), var(--color-surface));
+    td.busy {
+      font-weight: 700;
+      color: var(--color-text);
+      position: relative;
+      background: transparent;
+      z-index: 0;
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 7px 2px;
+        border-radius: 6px;
+        z-index: -1;
+        background: color-mix(in srgb, var(--color-primary) var(--load), var(--color-surface));
+      }
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
     }
   `
 })

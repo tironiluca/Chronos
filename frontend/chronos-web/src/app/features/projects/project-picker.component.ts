@@ -24,6 +24,18 @@ import { ProjectService } from '../../core/api/project.service';
     @if (resource.error()) {
       <span class="error">Could not load projects.</span>
     }
+  `,
+  styles: `
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    select {
+      width: 100%;
+    }
   `
 })
 export class ProjectPickerComponent {
