@@ -32,8 +32,16 @@ import { Observable } from 'rxjs';
             <h1>{{ project.code }} — {{ project.name }}</h1>
             <p class="page-subtitle">{{ project.tasks.length }} {{ project.tasks.length === 1 ? 'task' : 'tasks' }} · starts {{ startLabel(project.startDate) }}</p>
           </div>
+          @if (project.tasks.length > 0) {
+            <div class="page-actions">
+              <button type="button" class="btn-primary" [attr.aria-expanded]="showTaskForm()" (click)="showTaskForm.set(!showTaskForm())">
+                <chronos-icon [name]="showTaskForm() ? 'close' : 'plus'" [size]="17" /> New task
+              </button>
+            </div>
+          }
         </header>
 
+        @if (showTaskForm() || project.tasks.length === 0) {
         <section class="card">
           <div class="card-header"><h2>New task</h2></div>
           <form class="form-grid" (submit)="onCreateTask($event, project.id)">
@@ -55,6 +63,7 @@ import { Observable } from 'rxjs';
             }
           </form>
         </section>
+        }
 
         @if (project.tasks.length > 0) {
           <section class="card card-flush">
@@ -63,7 +72,7 @@ import { Observable } from 'rxjs';
               <span class="item-meta hint">Drag a bar to reschedule, or its handle to set progress.</span>
             </div>
             <chronos-gantt-chart
-              [tasks]="project.tasks"
+              [tasks]="tasks()"
               (dateChange)="onChartDateChange(project.id, $event)"
               (progressChange)="onChartProgressChange(project.id, $event)" />
           </section>
@@ -73,10 +82,10 @@ import { Observable } from 'rxjs';
               <h2>Tasks</h2>
               <span class="item-meta">Tap a task to edit dates, progress and dependencies.</span>
             </div>
-            @for (task of project.tasks; track task.id) {
+            @for (task of tasks(); track task.id) {
               <chronos-gantt-task-editor
                 [task]="task"
-                [tasks]="project.tasks"
+                [tasks]="tasks()"
                 [users]="directory.value() ?? []"
                 (assign)="assignTask(project.id, task.id, $event)"
                 (reschedule)="rescheduleTask(project.id, task.id, $event.startDate, $event.endDate)"
@@ -169,6 +178,13 @@ export class ProjectGanttPageComponent {
     (this.boards.value() ?? []).filter((board) => board.projectId === this.projectId())
   );
 
+  // Chart rows and the task list follow start date (then name), not API order.
+  protected readonly tasks = computed(() =>
+    [...(this.resource.value()?.tasks ?? [])].sort(
+      (a, b) => a.startDate.localeCompare(b.startDate) || a.name.localeCompare(b.name)
+    )
+  );
+  protected readonly showTaskForm = signal(false);
   protected readonly taskName = signal('');
   protected readonly taskStart = signal('');
   protected readonly taskEnd = signal('');

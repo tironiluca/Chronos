@@ -192,4 +192,24 @@ describe('ProjectGanttPageComponent', () => {
       expect(fixture.componentInstance['editError']()).toBe('Could not add dependency.');
     });
   });
+
+  it('orders tasks by start date for both the chart and the list', () => {
+    const late = makeTask({ id: 'late', name: 'Launch', startDate: '2026-02-01', endDate: '2026-02-03' });
+    const early = makeTask({ id: 'early', name: 'Research', startDate: '2026-01-05', endDate: '2026-01-09' });
+    const { fixture, fakeRenderer } = setup([late, early]);
+
+    expect(fakeRenderer.renderedTasks?.map((t) => t.id)).toEqual(['early', 'late']);
+    const names = Array.from(fixture.nativeElement.querySelectorAll('.task-name')).map((el) => (el as HTMLElement).textContent?.trim());
+    expect(names).toEqual(['Research', 'Launch']);
+  });
+
+  it('keeps the new-task form behind a toggle once the project has tasks', () => {
+    const { fixture } = setup([makeTask({ id: 't1', startDate: '2026-01-05', endDate: '2026-01-10' })]);
+    expect(fixture.nativeElement.querySelector('input[placeholder="Install PLC"]')).toBeNull();
+
+    fixture.componentInstance['showTaskForm'].set(true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('input[placeholder="Install PLC"]')).not.toBeNull();
+  });
 });
