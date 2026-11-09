@@ -61,7 +61,7 @@ import { ProjectPickerComponent } from '../projects/project-picker.component';
             <button
               type="button"
               class="chip"
-              [class.chip-active]="selectedBoardId() === board.id"
+              [class.chip-active]="activeBoardId() === board.id"
               (click)="selectedBoardId.set(board.id)">
               {{ board.name }}
             </button>
@@ -77,7 +77,7 @@ import { ProjectPickerComponent } from '../projects/project-picker.component';
         }
       </ul>
 
-      @if (selectedBoardId(); as boardId) {
+      @if (activeBoardId(); as boardId) {
         <chronos-kanban-board [boardId]="boardId" />
       }
     </div>
@@ -107,6 +107,8 @@ export class KanbanBoardsPageComponent {
   boardId = input<string | undefined>();
 
   protected readonly selectedBoardId = linkedSignal<string | null>(() => this.boardId() ?? null);
+  // Falls back to the first board so the page never opens on an empty canvas.
+  protected readonly activeBoardId = computed(() => this.selectedBoardId() ?? this.resource.value()?.[0]?.id ?? null);
   protected readonly newBoardName = signal('');
   protected readonly newBoardProjectId = signal<string | null>(null);
   protected readonly submitting = signal(false);

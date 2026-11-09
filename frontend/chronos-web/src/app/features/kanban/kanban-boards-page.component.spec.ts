@@ -93,4 +93,14 @@ describe('KanbanBoardsPageComponent', () => {
 
     expect(fixture.componentInstance['selectedBoardId']()).toBe('board-from-gantt');
   });
+
+  it('opens the first board when no board is selected or requested', () => {
+    const fixture = setup(createFakeBoardService([
+      { id: 'board-a', organizationId: 'org-1', name: 'A', projectId: null },
+      { id: 'board-b', organizationId: 'org-1', name: 'B', projectId: null }
+    ]));
+
+    expect(fixture.componentInstance['selectedBoardId']()).toBeNull();
+    expect(fixture.componentInstance['activeBoardId']()).toBe('board-a');
+  });
 });
